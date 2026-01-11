@@ -1,7 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { MISSIONARY_QUESTIONS, LEADER_QUESTIONS, TEAM_QUESTIONS, Question } from '@/lib/surveyData';
+import { createClient } from '@supabase/supabase-js';
+
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const sbClient = createClient(SB_URL, SB_KEY);
 
 const QuestionPreview = ({ question }: { question: Question }) => {
     return (
@@ -44,6 +49,45 @@ const QuestionPreview = ({ question }: { question: Question }) => {
 };
 
 export default function PreviewPage() {
+    const [questions, setQuestions] = useState({
+        missionary: MISSIONARY_QUESTIONS,
+        leader: LEADER_QUESTIONS,
+        team_member: TEAM_QUESTIONS
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchQuestions = async () => {
+            try {
+                const { data, error } = await sbClient
+                    .from('survey_questions')
+                    .select('*')
+                    .eq('is_hidden', false)
+                    .order('sort_order', { ascending: true });
+
+                if (!error && data && data.length > 0) {
+                    const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
+                    data.forEach(q => {
+                        const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
+                        if (q.role === 'common') qMap.common.push(mappedQ);
+                        else if (qMap[q.role]) qMap[q.role].push(mappedQ);
+                    });
+                    setQuestions({
+                        missionary: qMap.missionary.length > 0 ? qMap.missionary : MISSIONARY_QUESTIONS,
+                        leader: qMap.leader.length > 0 ? [...qMap.leader, ...qMap.common] : LEADER_QUESTIONS,
+                        team_member: qMap.team_member.length > 0 ? [...qMap.team_member, ...qMap.common] : TEAM_QUESTIONS
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to fetch dynamic questions:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchQuestions();
+    }, []);
+
     return (
         <div className="min-h-screen bg-[#f8fafc] py-12 px-4">
             <div className="max-w-3xl mx-auto">
@@ -55,31 +99,31 @@ export default function PreviewPage() {
                 <section className="mb-20">
                     <div className="flex items-center gap-3 mb-8 border-b border-slate-200 pb-4">
                         <h2 className="text-xl font-bold text-blue-600">1. 선교사용 설문</h2>
-                        <span className="text-slate-400 text-sm font-normal">({MISSIONARY_QUESTIONS.length} 문항)</span>
+                        <span className="text-slate-400 text-sm font-normal">({questions.missionary.length} 문항)</span>
                     </div>
-                    {MISSIONARY_QUESTIONS.map((q) => <QuestionPreview key={q.id} question={q} />)}
+                    {questions.missionary.map((q) => <QuestionPreview key={q.id} question={q} />)}
                 </section>
 
                 <section className="mb-20">
                     <div className="flex items-center gap-3 mb-8 border-b border-slate-200 pb-4">
                         <h2 className="text-xl font-bold text-blue-600">2. 인솔자용 설문</h2>
-                        <span className="text-slate-400 text-sm font-normal">({LEADER_QUESTIONS.length} 문항)</span>
+                        <span className="text-slate-400 text-sm font-normal">({questions.leader.length} 문항)</span>
                     </div>
                     <div className="p-4 mb-6 bg-blue-50 text-blue-700 rounded-lg text-sm mb-8">
                         인솔자 전용 문항 뒤에 공통 질문이 바로 이어집니다.
                     </div>
-                    {LEADER_QUESTIONS.map((q) => <QuestionPreview key={q.id} question={q} />)}
+                    {questions.leader.map((q) => <QuestionPreview key={q.id} question={q} />)}
                 </section>
 
                 <section className="mb-20">
                     <div className="flex items-center gap-3 mb-8 border-b border-slate-200 pb-4">
                         <h2 className="text-xl font-bold text-blue-600">3. 단기선교 팀원용 설문</h2>
-                        <span className="text-slate-400 text-sm font-normal">({TEAM_QUESTIONS.length} 문항)</span>
+                        <span className="text-slate-400 text-sm font-normal">({questions.team_member.length} 문항)</span>
                     </div>
                     <div className="p-4 mb-6 bg-blue-50 text-blue-700 rounded-lg text-sm mb-8">
                         팀원 전용 문항 뒤에 공통 질문이 바로 이어집니다.
                     </div>
-                    {TEAM_QUESTIONS.map((q) => <QuestionPreview key={q.id} question={q} />)}
+                    {questions.team_member.map((q) => <QuestionPreview key={q.id} question={q} />)}
                 </section>
 
                 <footer className="text-center text-slate-400 text-sm pt-8 border-t border-slate-200">

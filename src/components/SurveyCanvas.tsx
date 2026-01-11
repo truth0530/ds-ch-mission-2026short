@@ -54,13 +54,57 @@ export default function SurveyCanvas() {
         scroll: 0,
         cursorBlink: 0,
         width: 0,
-        height: 0
+        height: 0,
+        questions: {
+            missionary: [] as Question[],
+            leader: [] as Question[],
+            team_member: [] as Question[]
+        }
     });
 
     const stateRef = useRef(state);
     useEffect(() => { stateRef.current = state; }, [state]);
 
-    const initApp = () => {
+    const loadQuestions = async (client: any) => {
+        try {
+            const { data, error } = await client
+                .from('survey_questions')
+                .select('*')
+                .eq('is_hidden', false)
+                .order('sort_order', { ascending: true });
+
+            if (data && data.length > 0) {
+                const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
+                data.forEach((q: any) => {
+                    const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
+                    if (q.role === 'common') qMap.common.push(mappedQ);
+                    else if (qMap[q.role]) qMap[q.role].push(mappedQ);
+                });
+                setState(prev => ({
+                    ...prev,
+                    questions: {
+                        missionary: qMap.missionary.length > 0 ? qMap.missionary : MISSIONARY_QUESTIONS,
+                        leader: qMap.leader.length > 0 ? [...qMap.leader, ...qMap.common] : LEADER_QUESTIONS,
+                        team_member: qMap.team_member.length > 0 ? [...qMap.team_member, ...qMap.common] : TEAM_QUESTIONS
+                    }
+                }));
+            } else {
+                throw new Error('No questions found');
+            }
+        } catch (e) {
+            console.warn('Falling back to static questions:', e);
+            setState(prev => ({
+                ...prev,
+                questions: {
+                    missionary: MISSIONARY_QUESTIONS,
+                    leader: LEADER_QUESTIONS,
+                    team_member: TEAM_QUESTIONS
+                }
+            }));
+        }
+    };
+
+    const initApp = async () => {
         if (!sbKey) {
             alert('인증을 위해 Anon Key를 입력해주세요.');
             return;
@@ -68,6 +112,7 @@ export default function SurveyCanvas() {
         try {
             const client = createSupabaseClient(ENV.SUPABASE_URL, sbKey);
             setSbClient(client);
+            await loadQuestions(client);
             setIsInitialized(true);
         } catch (e: any) {
             alert('인증 실패: ' + e.message);
@@ -78,13 +123,16 @@ export default function SurveyCanvas() {
         const url = ENV.SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (key && key !== 'your_anon_key_here') {
-            try {
-                const client = createSupabaseClient(url, key);
-                setSbClient(client);
-                setIsInitialized(true);
-            } catch (e) {
-                console.error('Auto-initialization failed:', e);
-            }
+            (async () => {
+                try {
+                    const client = createSupabaseClient(url, key);
+                    setSbClient(client);
+                    await loadQuestions(client);
+                    setIsInitialized(true);
+                } catch (e) {
+                    console.error('Auto-initialization failed:', e);
+                }
+            })();
         }
     }, []);
 
@@ -217,11 +265,11 @@ export default function SurveyCanvas() {
     };
 
     const renderSurveyContent = (ctx: CanvasRenderingContext2D, startY: number) => {
-        const { width, role, formData, focus, cursorBlink, mouse, scroll } = stateRef.current;
+        const { width, role, formData, focus, cursorBlink, mouse, scroll, questions: dynQuestions } = stateRef.current;
         let questions: Question[] = [];
-        if (role === '선교사') questions = MISSIONARY_QUESTIONS;
-        else if (role === '인솔자') questions = LEADER_QUESTIONS;
-        else if (role === '단기선교 팀원') questions = TEAM_QUESTIONS;
+        if (role === '선교사') questions = dynQuestions.missionary;
+        else if (role === '인솔자') questions = dynQuestions.leader;
+        else if (role === '단기선교 팀원') questions = dynQuestions.team_member;
 
         let currentY = startY + 20;
         questions.forEach((q) => {
@@ -447,9 +495,10 @@ export default function SurveyCanvas() {
 
             if (isCollapsed) {
                 let questions: Question[] = [];
-                if (role === '선교사') questions = MISSIONARY_QUESTIONS;
-                else if (role === '인솔자') questions = LEADER_QUESTIONS;
-                else if (role === '단기선교 팀원') questions = TEAM_QUESTIONS;
+                const qData = stateRef.current.questions;
+                if (role === '선교사') questions = qData.missionary;
+                else if (role === '인솔자') questions = qData.leader;
+                else if (role === '단기선교 팀원') questions = qData.team_member;
 
                 currentY += 20;
                 for (let q of questions) {
