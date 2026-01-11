@@ -45,7 +45,7 @@ export default function SurveyCanvas() {
     const [sbKey, setSbKey] = useState('');
 
     const [state, setState] = useState({
-        view: 'role_selection',
+        view: 'landing',
         role: null as '선교사' | '인솔자' | '단기선교 팀원' | null,
         selectedTeam: null as TeamInfo | null,
         formData: {} as any,
@@ -59,6 +59,11 @@ export default function SurveyCanvas() {
             missionary: [] as Question[],
             leader: [] as Question[],
             team_member: [] as Question[]
+        },
+        auth: {
+            user: null as any,
+            isAdmin: false,
+            loading: true
         }
     });
 
@@ -128,6 +133,17 @@ export default function SurveyCanvas() {
                     const client = createSupabaseClient(url, key);
                     setSbClient(client);
                     await loadQuestions(client);
+
+                    // Auth monitoring
+                    const { data: { session } } = await client.auth.getSession();
+                    if (session?.user) await checkAdmin(client, session.user);
+                    else setState(prev => ({ ...prev, auth: { ...prev.auth, loading: false } }));
+
+                    client.auth.onAuthStateChange(async (_event: string, session: any) => {
+                        if (session?.user) await checkAdmin(client, session.user);
+                        else setState(prev => ({ ...prev, auth: { user: null, isAdmin: false, loading: false } }));
+                    });
+
                     setIsInitialized(true);
                 } catch (e) {
                     console.error('Auto-initialization failed:', e);
@@ -135,6 +151,22 @@ export default function SurveyCanvas() {
             })();
         }
     }, []);
+
+    const checkAdmin = async (client: any, user: any) => {
+        const { data } = await client.from('admin_users').select('email').eq('email', user.email).single();
+        setState(prev => ({
+            ...prev,
+            auth: { user, isAdmin: !!data || user.email === 'truth0530@gmail.com', loading: false }
+        }));
+    };
+
+    const handleGoogleLogin = async () => {
+        if (!sbClient) return;
+        await sbClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin }
+        });
+    };
 
     const resize = useCallback(() => {
         const canvas = canvasRef.current;
@@ -245,9 +277,59 @@ export default function SurveyCanvas() {
         ctx.fillText(line, width / 2, currY);
     };
 
+    const renderLanding = (ctx: CanvasRenderingContext2D) => {
+        const { width, height, mouse, auth } = stateRef.current;
+        renderHeader(ctx, '2026 Mission Survey', '단기선교 사역 평가를 위한 관리 시스템입니다.');
+
+        const btnW = width - 80;
+        const btnH = 60;
+        const centerX = width / 2;
+        const startY = height / 2 - 20;
+
+        if (auth.loading) {
+            ctx.fillStyle = layout.colors.label;
+            ctx.font = '14px sans-serif';
+            ctx.fillText('사용자 정보를 확인 중...', width / 2, startY);
+            return;
+        }
+
+        if (!auth.user) {
+            // anonymous start
+            const hover1 = isInside(mouse.x, mouse.y, layout.padding, startY, btnW, btnH);
+            drawRoundedRect(ctx, layout.padding, startY, btnW, btnH, 15, hover1 ? '#f8fafc' : '#fff', layout.colors.primary);
+            ctx.fillStyle = layout.colors.primary;
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('로그인 없이 설문 시작하기', centerX, startY + 36);
+
+            // admin login
+            const hover2 = isInside(mouse.x, mouse.y, layout.padding, startY + 80, btnW, btnH);
+            drawRoundedRect(ctx, layout.padding, startY + 80, btnW, btnH, 15, hover2 ? '#1e293b' : '#334155');
+            ctx.fillStyle = '#fff';
+            ctx.fillText('관리자 구글 로그인', centerX, startY + 116);
+        } else {
+            // survey start
+            const hover1 = isInside(mouse.x, mouse.y, layout.padding, startY, btnW, btnH);
+            drawRoundedRect(ctx, layout.padding, startY, btnW, btnH, 15, hover1 ? '#f8fafc' : '#fff', layout.colors.primary);
+            ctx.fillStyle = layout.colors.primary;
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('설문 시작하기', centerX, startY + 36);
+
+            if (auth.isAdmin) {
+                const hover2 = isInside(mouse.x, mouse.y, layout.padding, startY + 80, btnW, btnH);
+                drawRoundedRect(ctx, layout.padding, startY + 80, btnW, btnH, 15, hover2 ? '#eff6ff' : '#fff', '#2563eb');
+                ctx.fillStyle = '#2563eb';
+                ctx.fillText('관리 대시보드 이동', centerX, startY + 116);
+            }
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(`Logged in as: ${auth.user.email}`, centerX, height - 40);
+        }
+    };
+
     const renderRoleSelection = (ctx: CanvasRenderingContext2D) => {
         const { width, mouse } = stateRef.current;
-        renderHeader(ctx, '2026 단기선교 사역 평가', '부족한 부분을 보완하고 더 나은 모습을 이루기 위하여 준비하였습니다.');
+        renderHeader(ctx, '역할 선택', '본인의 사역 역할을 선택해 주세요.');
 
         const roles = ['선교사', '인솔자', '단기선교 팀원'];
         const startY = 180;
@@ -432,6 +514,7 @@ export default function SurveyCanvas() {
         const render = () => {
             ctx.clearRect(0, 0, stateRef.current.width, stateRef.current.height);
             switch (stateRef.current.view) {
+                case 'landing': renderLanding(ctx); break;
                 case 'role_selection': renderRoleSelection(ctx); break;
                 case 'team_selection': renderTeamPage(ctx); break;
                 case 'submitting': {
@@ -455,6 +538,27 @@ export default function SurveyCanvas() {
 
     const handleInteraction = (mx: number, my: number) => {
         const { view, width, height, formData, scroll, selectedTeam, role } = stateRef.current;
+
+        if (view === 'landing') {
+            const btnW = width - 80;
+            const btnH = 60;
+            const startY = height / 2 - 20;
+
+            if (!stateRef.current.auth.user) {
+                if (isInside(mx, my, layout.padding, startY, btnW, btnH)) {
+                    setState(prev => ({ ...prev, view: 'role_selection' }));
+                } else if (isInside(mx, my, layout.padding, startY + 80, btnW, btnH)) {
+                    handleGoogleLogin();
+                }
+            } else {
+                if (isInside(mx, my, layout.padding, startY, btnW, btnH)) {
+                    setState(prev => ({ ...prev, view: 'role_selection' }));
+                } else if (stateRef.current.auth.isAdmin && isInside(mx, my, layout.padding, startY + 80, btnW, btnH)) {
+                    window.location.href = '/admin/questions';
+                }
+            }
+            return;
+        }
 
         if (view === 'role_selection') {
             const roles = ['선교사', '인솔자', '단기선교 팀원'];

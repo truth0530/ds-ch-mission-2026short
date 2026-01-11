@@ -19,5 +19,5 @@ ON public.admin_users FOR ALL
 USING (auth.jwt() ->> 'email' IN (SELECT email FROM public.admin_users))
 WITH CHECK (auth.jwt() ->> 'email' IN (SELECT email FROM public.admin_users));
 
--- 5. 초기 관리자 등록 (본인의 구글 이메일로 수정하여 실행하세요)
--- INSERT INTO public.admin_users (email) VALUES ('your-email@gmail.com');
+-- 5. 초기 관리자 등록
+INSERT INTO public.admin_users (email) VALUES ('truth0530@gmail.com') ON CONFLICT (email) DO NOTHING;
