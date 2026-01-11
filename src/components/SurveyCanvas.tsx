@@ -39,7 +39,7 @@ const layout = {
 
 export default function SurveyCanvas() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const hiddenInputRef = useRef<HTMLInputElement>(null);
+    const hiddenInputRef = useRef<HTMLTextAreaElement>(null);
     const [isInitialized, setIsInitialized] = useState(false);
     const [sbClient, setSbClient] = useState<any>(null);
 
@@ -621,10 +621,15 @@ export default function SurveyCanvas() {
                         currentY += options.length * 35 + 20;
                     } else {
                         if (isInside(mx, realY, layout.padding, currentY, width - layout.padding * 2, layout.textareaH)) {
-                            setState(prev => ({ ...prev, focus: q.id }));
-                            if (hiddenInputRef.current) {
-                                hiddenInputRef.current.value = formData[q.id] || '';
-                                hiddenInputRef.current.focus();
+                            if (stateRef.current.focus !== q.id) {
+                                setState(prev => ({ ...prev, focus: q.id }));
+                                if (hiddenInputRef.current) {
+                                    hiddenInputRef.current.value = formData[q.id] || '';
+                                    hiddenInputRef.current.focus();
+                                }
+                            } else {
+                                // Already focused, ensure we keep focus
+                                hiddenInputRef.current?.focus();
                             }
                             return;
                         }
@@ -700,10 +705,9 @@ export default function SurveyCanvas() {
                     }}
                     className="block cursor-default"
                 />
-                <input
+                <textarea
                     ref={hiddenInputRef}
-                    type="text"
-                    className="absolute -top-24 -left-24 w-px h-px opacity-0"
+                    className="fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
                     onChange={(e) => {
                         const val = e.target.value;
                         setState(prev => prev.focus ? { ...prev, formData: { ...prev.formData, [prev.focus]: val } } : prev);
