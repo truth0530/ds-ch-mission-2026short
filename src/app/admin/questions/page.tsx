@@ -274,23 +274,18 @@ export default function AdminQuestionsPage() {
             return;
         }
 
-        checkUser(client);
-        const { data: authListener } = client.auth.onAuthStateChange((_event: any, session: any) => {
-            if (session?.user) checkAuthorization(client, session.user);
-            else { setUser(null); setIsAuthorized(false); }
+        const { data: { subscription } } = client.auth.onAuthStateChange((_event: any, session: any) => {
+            if (session?.user) {
+                checkAuthorization(client, session.user);
+            } else {
+                setUser(null);
+                setIsAuthorized(false);
+                setAuthLoading(false);
+            }
         });
-        return () => { authListener.subscription.unsubscribe(); };
+        return () => subscription.unsubscribe();
     }, []);
 
-    const checkUser = async (client: any) => {
-        setAuthLoading(true);
-        const { data: { session } } = await client.auth.getSession();
-        if (session?.user) {
-            await checkAuthorization(client, session.user);
-        } else {
-            setAuthLoading(false);
-        }
-    };
 
     const checkAuthorization = async (client: any, currentUser: any) => {
         const { data, error } = await client
