@@ -64,7 +64,7 @@ export const COMMON_SHARED_QUESTIONS: Question[] = [
 ];
 
 export const MISSIONARY_QUESTIONS: Question[] = [
-    { id: 'q1', type: 'scale', text: '1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
+    { id: 'q1', type: 'scale', text: '1-1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
     { id: 'q1_1', type: 'text', text: '1-1. 영적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?' },
     { id: 'q2', type: 'scale', text: '2. 이번에 방문한 단기선교팀이 사역적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
     { id: 'q2_1', type: 'text', text: '2-1. 사역적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?' },

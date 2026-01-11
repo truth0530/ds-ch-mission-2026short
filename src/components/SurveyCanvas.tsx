@@ -22,18 +22,28 @@ import {
 } from '@/lib/surveyData';
 
 const layout = {
-    padding: 40,
-    headerHeight: 120,
-    rowGap: 100,
-    inputH: 50,
-    textareaH: 100,
+    padding: 24,
+    maxWidth: 600,
+    headerHeight: 140,
+    rowGap: 80,
+    inputH: 56,
+    textareaH: 120,
+    radius: 16,
     colors: {
-        primary: '#2563eb',
-        text: '#1f2937',
-        label: '#4b5563',
-        border: '#d1d5db',
+        primary: '#4f46e5', // Indigo-600
+        primaryHover: '#4338ca', // Indigo-700
+        secondary: '#0ea5e9', // Sky-500
+        text: '#1e293b', // Slate-800
+        subtext: '#64748b', // Slate-500
+        label: '#475569', // Slate-600
+        border: '#e2e8f0', // Slate-200
         bg: '#ffffff',
-        success: '#10b981'
+        bgHover: '#f8fafc', // Slate-50
+        cardBg: '#ffffff',
+        success: '#10b981', // Emerald-500
+        error: '#ef4444', // Red-500
+        shadow: 'rgba(148, 163, 184, 0.1)', // Slate shadow
+        shadowHover: 'rgba(148, 163, 184, 0.2)'
     }
 };
 
@@ -284,38 +294,81 @@ export default function SurveyCanvas() {
     }, [state.formData, state.respondentInfo, isInitialized, state.view, state.selectedTeam, saveToLocalStorage]);
 
     const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
-        const chars = text.split('');
+        const words = text.split('');
         const lines = [];
         let currentLine = '';
-        for (let i = 0; i < chars.length; i++) {
-            const char = chars[i];
+        for (let i = 0; i < words.length; i++) {
+            const char = words[i];
             const testLine = currentLine + char;
             const metrics = ctx.measureText(testLine);
-            if (metrics.width < maxWidth) {
-                currentLine = testLine;
-            } else {
+            if (metrics.width > maxWidth && i > 0) {
                 lines.push(currentLine);
                 currentLine = char;
+            } else {
+                currentLine = testLine;
             }
         }
         lines.push(currentLine);
         return lines;
     };
 
-    const drawRoundedRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill?: string, stroke?: string) => {
+    const drawCard = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, opts: {
+        fill?: string;
+        stroke?: string;
+        shadow?: boolean;
+        radius?: number;
+        hover?: boolean;
+    }) => {
+        const r = opts.radius || layout.radius;
+        const fill = opts.fill || layout.colors.cardBg;
+
+        ctx.save();
+        if (opts.shadow) {
+            ctx.shadowColor = opts.hover ? layout.colors.shadowHover : layout.colors.shadow;
+            ctx.shadowBlur = opts.hover ? 15 : 10;
+            ctx.shadowOffsetY = opts.hover ? 4 : 2;
+        }
+
         ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+        ctx.roundRect(x, y, w, h, r);
+        ctx.fillStyle = fill;
+        ctx.fill();
+
+        if (opts.stroke) {
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = opts.stroke;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        ctx.restore();
+    };
+
+    const drawButton = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, text: string, opts: {
+        primary?: boolean;
+        hover?: boolean;
+        icon?: string;
+    }) => {
+        const fill = opts.primary
+            ? (opts.hover ? layout.colors.primaryHover : layout.colors.primary)
+            : (opts.hover ? layout.colors.bgHover : layout.colors.bg);
+
+        const textCol = opts.primary ? '#fff' : layout.colors.text;
+
+        drawCard(ctx, x, y, w, h, {
+            fill,
+            radius: 12,
+            shadow: !opts.primary,  // Add shadow to secondary buttons
+            stroke: opts.primary ? undefined : layout.colors.border
+        });
+
+        ctx.fillStyle = textCol;
+        ctx.font = 'bold 16px Pretendard, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x + w / 2, y + h / 2);
+
+        // Reset defaults
+        ctx.textBaseline = 'alphabetic';
     };
 
     const isInside = (mx: number, my: number, x: number, y: number, w: number, h: number) => {
@@ -324,96 +377,120 @@ export default function SurveyCanvas() {
 
     const renderHeader = (ctx: CanvasRenderingContext2D, title: string, subtitle: string) => {
         const { width } = stateRef.current;
-        ctx.fillStyle = layout.colors.text;
-        ctx.font = 'bold 22px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(title, width / 2, 60);
-        ctx.font = '12px sans-serif';
-        ctx.fillStyle = layout.colors.label;
+        const cx = width / 2;
 
-        const words = subtitle.split(' ');
+        // Decorative background blob
+        ctx.save();
+        const gradient = ctx.createLinearGradient(0, 0, width, 0);
+        gradient.addColorStop(0, layout.colors.primary);
+        gradient.addColorStop(1, layout.colors.secondary);
+        ctx.globalAlpha = 0.05;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, 180);
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+
+        // Title
+        ctx.fillStyle = layout.colors.text;
+        ctx.font = '800 28px Pretendard, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, cx, 60);
+
+        // Subtitle logic
+        ctx.font = '15px Pretendard, sans-serif';
+        ctx.fillStyle = layout.colors.subtext;
+        const words = subtitle.split('');
         let line = '';
-        let currY = 85;
+        let currY = 90;
         for (let n = 0; n < words.length; n++) {
-            let testLine = line + words[n] + ' ';
+            let testLine = line + words[n];
             let metrics = ctx.measureText(testLine);
-            if (metrics.width > width - 60 && n > 0) {
-                ctx.fillText(line, width / 2, currY);
-                line = words[n] + ' ';
-                currY += 18;
+            if (metrics.width > width - 80 && n > 0) {
+                ctx.fillText(line, cx, currY);
+                line = words[n];
+                currY += 24;
             } else {
                 line = testLine;
             }
         }
-        ctx.fillText(line, width / 2, currY);
+        ctx.fillText(line, cx, currY);
     };
 
     const renderLanding = (ctx: CanvasRenderingContext2D) => {
         const { width, height, mouse, auth } = stateRef.current;
-        renderHeader(ctx, '2026 Mission Survey', '단기선교 사역 평가를 위한 관리 시스템입니다.');
+        renderHeader(ctx, '2026 Mission Survey', '단기선교 사역 평가 및 피드백 시스템');
 
-        const btnW = width - 80;
-        const btnH = 60;
+        const btnW = Math.min(width - 48, 320);
+        const btnH = 64;
         const centerX = width / 2;
-        const startY = height / 2 - 20;
+        const btnX = centerX - btnW / 2;
+        const startY = height / 2 - 40;
 
         if (auth.loading) {
-            ctx.fillStyle = layout.colors.label;
-            ctx.font = '14px sans-serif';
-            ctx.fillText('사용자 정보를 확인 중...', width / 2, startY);
+            ctx.fillStyle = layout.colors.subtext;
+            ctx.font = '14px Pretendard, sans-serif';
+            ctx.fillText('사용자 정보를 확인 중...', centerX, startY);
             return;
         }
 
         if (!auth.user) {
             // anonymous start
-            const hover1 = isInside(mouse.x, mouse.y, layout.padding, startY, btnW, btnH);
-            drawRoundedRect(ctx, layout.padding, startY, btnW, btnH, 15, hover1 ? '#f8fafc' : '#fff', layout.colors.primary);
-            ctx.fillStyle = layout.colors.primary;
-            ctx.font = 'bold 16px sans-serif';
-            ctx.fillText('로그인 없이 설문 시작하기', centerX, startY + 36);
+            const hover1 = isInside(mouse.x, mouse.y, btnX, startY, btnW, btnH);
+            drawButton(ctx, btnX, startY, btnW, btnH, '로그인 없이 시작하기', { primary: true, hover: hover1 });
 
             // admin login
-            const hover2 = isInside(mouse.x, mouse.y, layout.padding, startY + 80, btnW, btnH);
-            drawRoundedRect(ctx, layout.padding, startY + 80, btnW, btnH, 15, hover2 ? '#1e293b' : '#334155');
-            ctx.fillStyle = '#fff';
-            ctx.fillText('관리자 구글 로그인', centerX, startY + 116);
+            const hover2 = isInside(mouse.x, mouse.y, btnX, startY + 80, btnW, btnH);
+            drawButton(ctx, btnX, startY + 80, btnW, btnH, '관리자 구글 로그인', { primary: false, hover: hover2 });
         } else {
             // survey start
-            const hover1 = isInside(mouse.x, mouse.y, layout.padding, startY, btnW, btnH);
-            drawRoundedRect(ctx, layout.padding, startY, btnW, btnH, 15, hover1 ? '#f8fafc' : '#fff', layout.colors.primary);
-            ctx.fillStyle = layout.colors.primary;
-            ctx.font = 'bold 16px sans-serif';
-            ctx.fillText('설문 시작하기', centerX, startY + 36);
+            const hover1 = isInside(mouse.x, mouse.y, btnX, startY, btnW, btnH);
+            drawButton(ctx, btnX, startY, btnW, btnH, '설문 시작하기', { primary: true, hover: hover1 });
 
             if (auth.isAdmin) {
-                const hover2 = isInside(mouse.x, mouse.y, layout.padding, startY + 80, btnW, btnH);
-                drawRoundedRect(ctx, layout.padding, startY + 80, btnW, btnH, 15, hover2 ? '#eff6ff' : '#fff', '#2563eb');
-                ctx.fillStyle = '#2563eb';
-                ctx.fillText('관리 대시보드 이동', centerX, startY + 116);
+                const hover2 = isInside(mouse.x, mouse.y, btnX, startY + 80, btnW, btnH);
+                drawButton(ctx, btnX, startY + 80, btnW, btnH, '관리 대시보드', { primary: false, hover: hover2 });
             }
 
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`Logged in as: ${auth.user.email}`, centerX, height - 40);
+            ctx.fillStyle = layout.colors.subtext;
+            ctx.font = '12px Pretendard, sans-serif';
+            ctx.fillText(`로그인됨: ${auth.user.email}`, centerX, height - 40);
         }
     };
 
     const renderRoleSelection = (ctx: CanvasRenderingContext2D) => {
         const { width, mouse } = stateRef.current;
-        renderHeader(ctx, '역할 선택', '본인의 사역 역할을 선택해 주세요.');
+        renderHeader(ctx, '역할 선택', '이번 단기선교에서 맡으신 역할을 선택해주세요.');
 
         const roles = ['선교사', '인솔자', '단기선교 팀원'];
         const startY = 180;
-        const btnH = 60;
+        const btnH = 72;
+        const gap = 16;
 
         roles.forEach((role, i) => {
-            const y = startY + (btnH + 20) * i;
+            const y = startY + (btnH + gap) * i;
             const hover = isInside(mouse.x, mouse.y, layout.padding, y, width - layout.padding * 2, btnH);
-            drawRoundedRect(ctx, layout.padding, y, width - layout.padding * 2, btnH, 12, hover ? '#f1f5f9' : '#fff', layout.colors.border);
-            ctx.fillStyle = layout.colors.text;
-            ctx.font = 'bold 16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${i + 1}. ${role}`, width / 2, y + 36);
+
+            drawCard(ctx, layout.padding, y, width - layout.padding * 2, btnH, {
+                fill: hover ? layout.colors.bgHover : '#fff',
+                stroke: hover ? layout.colors.primary : layout.colors.border,
+                shadow: true,
+                hover,
+                radius: 16
+            });
+
+            ctx.fillStyle = hover ? layout.colors.primary : layout.colors.text;
+            ctx.font = 'bold 18px Pretendard, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(role, layout.padding + 24, y + btnH / 2);
+
+            // Arrow icon
+            ctx.fillStyle = hover ? layout.colors.primary : layout.colors.subtext;
+            ctx.font = '18px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('→', width - layout.padding - 24, y + btnH / 2);
+
+            ctx.textBaseline = 'alphabetic'; // reset
         });
     };
 
@@ -425,94 +502,140 @@ export default function SurveyCanvas() {
         else if (role === '단기선교 팀원') questions = dynQuestions.team_member;
 
         let currentY = startY + 20;
-        questions.forEach((q) => {
+        questions.forEach((q, idx) => {
             const hasError = validationErrors.includes(q.id);
-            ctx.fillStyle = hasError ? '#ef4444' : layout.colors.label;
-            ctx.font = 'bold 14px sans-serif';
+
+            // Question Text
+            ctx.fillStyle = hasError ? layout.colors.error : layout.colors.text;
+            ctx.font = 'bold 16px Pretendard, sans-serif';
             ctx.textAlign = 'left';
 
-            const lines = wrapText(ctx, q.text, width - layout.padding * 2);
+            const qText = `${idx + 1}. ${q.text}`;
+            const lines = wrapText(ctx, qText, width - layout.padding * 2);
             lines.forEach((line, li) => {
-                ctx.fillText(line, layout.padding, currentY + li * 20);
+                ctx.fillText(line, layout.padding, currentY + li * 24);
             });
-            currentY += lines.length * 20 + 10;
+            currentY += lines.length * 24 + 12;
 
             if (q.type === 'scale') {
                 const spacing = (width - layout.padding * 2) / 6;
+                const circleY = currentY + 20;
+
                 for (let j = 0; j < 7; j++) {
                     const val = j + 1;
                     const rx = layout.padding + (spacing * j);
                     const isSelected = formData[q.id] === val;
+                    const isHover = Math.hypot(mouse.x - rx, (mouse.y + scroll) - circleY) < 18;
+
                     ctx.beginPath();
-                    ctx.arc(rx, currentY + 15, 12, 0, Math.PI * 2);
-                    ctx.strokeStyle = isSelected ? layout.colors.primary : layout.colors.border;
-                    ctx.stroke();
+                    ctx.arc(rx, circleY, 16, 0, Math.PI * 2);
+
                     if (isSelected) {
-                        ctx.beginPath();
-                        ctx.arc(rx, currentY + 15, 7, 0, Math.PI * 2);
                         ctx.fillStyle = layout.colors.primary;
                         ctx.fill();
+                        ctx.fillStyle = '#fff';
+                    } else {
+                        ctx.fillStyle = isHover ? layout.colors.bgHover : '#fff';
+                        ctx.fill();
+                        ctx.strokeStyle = isHover ? layout.colors.primary : layout.colors.border;
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        ctx.fillStyle = layout.colors.label;
                     }
-                    ctx.fillStyle = isSelected ? layout.colors.primary : layout.colors.label;
-                    ctx.font = '11px sans-serif';
+
+                    ctx.font = isSelected ? 'bold 14px Pretendard' : '14px Pretendard';
                     ctx.textAlign = 'center';
-                    ctx.fillText(val.toString(), rx, currentY + 42);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(val.toString(), rx, circleY);
                 }
+                ctx.textBaseline = 'alphabetic';
                 ctx.textAlign = 'left';
-                currentY += 60;
+
+                // Labels for 1 and 7
+                ctx.font = '11px Pretendard';
+                ctx.fillStyle = layout.colors.subtext;
+                ctx.fillText('매우 부족', layout.padding, circleY + 30);
+                ctx.textAlign = 'right';
+                ctx.fillText('매우 우수', width - layout.padding - 4, circleY + 30);
+
+                currentY += 80;
             } else if (q.type === 'multi_select') {
                 const options = q.options || [];
                 options.forEach((opt, oi) => {
                     const isSelected = (formData[q.id] || []).includes(opt);
-                    const optY = currentY + oi * 35;
-                    drawRoundedRect(ctx, layout.padding, optY, 20, 20, 4, isSelected ? layout.colors.primary : '#fff', layout.colors.border);
+                    const optY = currentY + oi * 44;
+                    const optH = 36;
+                    const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, optY, width - layout.padding * 2, optH);
+
+                    drawCard(ctx, layout.padding, optY, width - layout.padding * 2, optH, {
+                        fill: isSelected ? '#eff6ff' : (hover ? '#f8fafc' : '#fff'),
+                        stroke: isSelected ? layout.colors.primary : layout.colors.border,
+                        radius: 8
+                    });
+
+                    // Checkbox icon
+                    const checkX = layout.padding + 12;
+                    const checkY = optY + 10;
+                    ctx.beginPath();
+                    ctx.rect(checkX, checkY, 16, 16);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = isSelected ? layout.colors.primary : layout.colors.subtext;
+                    ctx.stroke();
+
                     if (isSelected) {
-                        ctx.strokeStyle = '#fff';
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.moveTo(layout.padding + 5, optY + 10);
-                        ctx.lineTo(layout.padding + 9, optY + 14);
-                        ctx.lineTo(layout.padding + 15, optY + 6);
-                        ctx.stroke();
+                        ctx.fillStyle = layout.colors.primary;
+                        ctx.fillRect(checkX + 3, checkY + 3, 10, 10);
                     }
-                    ctx.fillStyle = layout.colors.text;
-                    ctx.font = '13px sans-serif';
+
+                    ctx.fillStyle = isSelected ? layout.colors.primary : layout.colors.text;
+                    ctx.font = '14px Pretendard';
                     ctx.textAlign = 'left';
-                    ctx.fillText(opt, layout.padding + 30, optY + 15);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(opt, layout.padding + 40, optY + optH / 2);
                 });
-                currentY += options.length * 35 + 20;
+                ctx.textBaseline = 'alphabetic';
+                currentY += options.length * 44 + 20;
             } else {
                 const isFocus = focus === q.id;
-                const hasError = validationErrors.includes(q.id);
                 const h = layout.textareaH;
-                const borderColor = hasError ? '#ef4444' : (isFocus ? layout.colors.primary : layout.colors.border);
-                drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, h, 8, isFocus ? '#f8fafc' : '#fff', borderColor);
-                ctx.fillStyle = formData[q.id] ? layout.colors.text : '#9ca3af';
-                ctx.font = '13px sans-serif';
-                const txt = formData[q.id] || '내용을 입력해주세요...';
+                const borderColor = hasError ? layout.colors.error : (isFocus ? layout.colors.primary : layout.colors.border);
+
+                drawCard(ctx, layout.padding, currentY, width - layout.padding * 2, h, {
+                    fill: isFocus ? '#fff' : '#f8fafc',
+                    stroke: borderColor,
+                    shadow: isFocus,
+                    radius: 12
+                });
+
+                ctx.fillStyle = formData[q.id] ? layout.colors.text : layout.colors.subtext;
+                ctx.font = '14px Pretendard';
+                const txt = formData[q.id] || '답변을 자유롭게 작성해주세요...';
                 const txtLines = wrapText(ctx, txt, width - layout.padding * 2 - 30);
                 txtLines.forEach((tl, tli) => {
-                    if (tli < 4) ctx.fillText(tl, layout.padding + 15, currentY + 25 + tli * 18);
+                    if (tli < 4) ctx.fillText(tl, layout.padding + 16, currentY + 30 + tli * 20);
                 });
                 if (isFocus && Math.floor(cursorBlink / 30) % 2 === 0) {
                     const lastLine = txtLines[txtLines.length - 1] || '';
                     const tw = ctx.measureText(lastLine).width;
                     ctx.fillStyle = layout.colors.primary;
-                    ctx.fillRect(layout.padding + 16 + tw, currentY + 10 + (txtLines.length - 1) * 18, 2, 16);
+                    ctx.fillRect(layout.padding + 16 + tw, currentY + 14 + (txtLines.length - 1) * 20, 2, 18);
                 }
                 currentY += h + 30;
             }
         });
 
         const btnY = currentY + 20;
-        const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, btnY, width - layout.padding * 2, 55);
-        drawRoundedRect(ctx, layout.padding, btnY, width - layout.padding * 2, 55, 12, hover ? '#1d4ed8' : layout.colors.primary);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 17px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('평가 제출하기', width / 2, btnY + 34);
-        return btnY + 100;
+        const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, btnY, width - layout.padding * 2, 60);
+        drawButton(ctx, layout.padding, btnY, width - layout.padding * 2, 60, '평가 제출하기', {
+            primary: true,
+            hover
+        });
+
+        return btnY + 120;
     };
+
+    // Helper to keep team page logic intact but just update styling in next step...
+    const renderTeamPageStyling = (ctx: CanvasRenderingContext2D) => { /* will replace real logic via tool */ };
 
     const renderTeamPage = (ctx: CanvasRenderingContext2D) => {
         const { width, height, mouse, scroll, selectedTeam, role, error } = stateRef.current;
@@ -521,79 +644,110 @@ export default function SurveyCanvas() {
 
         // Error banner (if any)
         if (error) {
-            const bannerH = 60;
-            drawRoundedRect(ctx, layout.padding, 20, width - layout.padding * 2, bannerH, 8, '#fef2f2', '#ef4444');
-            ctx.fillStyle = '#dc2626';
-            ctx.font = 'bold 13px sans-serif';
+            const bannerH = 64;
+            drawCard(ctx, layout.padding, 20, width - layout.padding * 2, bannerH, {
+                fill: '#fef2f2',
+                stroke: '#ef4444',
+                radius: 12
+            });
+            ctx.fillStyle = '#b91c1c';
+            ctx.font = 'bold 14px Pretendard, sans-serif';
             ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             const errorLines = wrapText(ctx, error, width - layout.padding * 2 - 30);
             errorLines.forEach((line, i) => {
-                ctx.fillText(line, width / 2, 38 + i * 18);
+                ctx.fillText(line, width / 2, 52 + i * 20 - ((errorLines.length - 1) * 10));
             });
+            ctx.textBaseline = 'alphabetic';
             ctx.textAlign = 'left';
         }
 
-        const headerY = error ? 100 : 60;
+        const headerY = error ? 110 : 60;
 
         ctx.textAlign = 'left';
         ctx.fillStyle = layout.colors.text;
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(role === '선교사' ? '선교사 평가' : '사역팀 선택', layout.padding, headerY);
+        ctx.font = '800 24px Pretendard, sans-serif';
+        const title = role === '선교사' ? '단기선교팀 평가' : '사역팀 선택';
+        ctx.fillText(title, layout.padding, headerY);
 
         // Back Button
         const backBtnW = 80;
-        const backBtnH = 34;
+        const backBtnH = 36;
         const backBtnX = width - layout.padding - backBtnW;
-        const backBtnY = headerY - 24;
+        const backBtnY = headerY - 26;
         const hoverBack = isInside(mouse.x, mouse.y + scroll, backBtnX, backBtnY, backBtnW, backBtnH);
-        drawRoundedRect(ctx, backBtnX, backBtnY, backBtnW, backBtnH, 8, hoverBack ? '#f1f5f9' : '#fff', layout.colors.border);
-        ctx.fillStyle = layout.colors.label;
-        ctx.font = 'bold 13px sans-serif';
+
+        drawCard(ctx, backBtnX, backBtnY, backBtnW, backBtnH, {
+            fill: hoverBack ? layout.colors.bgHover : '#fff',
+            stroke: layout.colors.border,
+            radius: 8,
+            shadow: true,
+            hover: hoverBack
+        });
+
+        ctx.fillStyle = layout.colors.subtext;
+        ctx.font = 'bold 13px Pretendard, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('뒤로가기', backBtnX + backBtnW / 2, backBtnY + 21);
+        ctx.textBaseline = 'middle';
+        ctx.fillText('뒤로가기', backBtnX + backBtnW / 2, backBtnY + backBtnH / 2);
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
 
         let currentY = headerY + 40;
         let lastDept = '';
         const isCollapsed = !!selectedTeam;
 
-        MISSION_TEAMS.forEach((team) => {
-            const isSelected = selectedTeam?.missionary === team.missionary;
-            if (isCollapsed && !isSelected) return;
-
-            if (!isCollapsed && team.dept !== lastDept) {
-                currentY += 20;
-                ctx.fillStyle = layout.colors.primary;
-                ctx.font = 'bold 14px sans-serif';
-                ctx.fillText(`[${team.dept}]`, layout.padding, currentY);
-                currentY += 20;
-                lastDept = team.dept;
-            }
-
-            const btnH = 65;
-            const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, currentY, width - layout.padding * 2, btnH);
-            drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, btnH, 10, isSelected ? '#eff6ff' : (hover ? '#f8fafc' : '#fff'), isSelected ? layout.colors.primary : layout.colors.border);
-
-            ctx.fillStyle = layout.colors.text;
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${team.missionary} (${team.country})`, layout.padding + 15, currentY + 25);
-            ctx.fillStyle = layout.colors.label;
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`인솔: ${team.leader} | 기간: ${team.period} | 인원: ${team.members}`, layout.padding + 15, currentY + 45);
-
-            if (isSelected) {
-                ctx.fillStyle = layout.colors.primary;
-                ctx.font = 'bold 11px sans-serif';
-                ctx.textAlign = 'right';
-                ctx.fillText(isCollapsed ? '변경하려면 클릭' : '선택됨', width - layout.padding - 15, currentY + 25);
-                ctx.textAlign = 'left';
-            }
-
-            currentY += btnH + 10;
-        });
-
-        if (isCollapsed) {
+        if (role === '선교사') {
+            // For Missionaries, skip team selection and show content directly
             currentY = renderSurveyContent(ctx, currentY);
+        } else {
+            // For others, show team selection list
+            MISSION_TEAMS.forEach((team) => {
+                const isSelected = selectedTeam?.missionary === team.missionary;
+                if (isCollapsed && !isSelected) return;
+
+                if (!isCollapsed && team.dept !== lastDept) {
+                    currentY += 24;
+                    ctx.fillStyle = layout.colors.primary;
+                    ctx.font = 'bold 13px Pretendard, sans-serif';
+                    ctx.fillText(`[${team.dept}]`, layout.padding, currentY);
+                    currentY += 12;
+                    lastDept = team.dept;
+                }
+
+                const btnH = 80;
+                const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, currentY, width - layout.padding * 2, btnH);
+
+                drawCard(ctx, layout.padding, currentY, width - layout.padding * 2, btnH, {
+                    fill: isSelected ? '#eff6ff' : (hover ? '#f8fafc' : '#fff'),
+                    stroke: isSelected ? layout.colors.primary : layout.colors.border,
+                    shadow: true,
+                    hover: hover || isSelected,
+                    radius: 16
+                });
+
+                ctx.fillStyle = isSelected ? layout.colors.primary : layout.colors.text;
+                ctx.font = 'bold 15px Pretendard, sans-serif';
+                ctx.fillText(`${team.missionary} (${team.country})`, layout.padding + 16, currentY + 30);
+
+                ctx.fillStyle = layout.colors.subtext;
+                ctx.font = '13px Pretendard, sans-serif';
+                ctx.fillText(`인솔: ${team.leader} | 기간: ${team.period}`, layout.padding + 16, currentY + 54);
+
+                if (isSelected) {
+                    ctx.fillStyle = layout.colors.primary;
+                    ctx.font = 'bold 12px Pretendard, sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(isCollapsed ? '변경하려면 클릭' : '선택됨', width - layout.padding - 16, currentY + 44);
+                    ctx.textAlign = 'left';
+                }
+
+                currentY += btnH + 12;
+            });
+
+            if (isCollapsed) {
+                currentY = renderSurveyContent(ctx, currentY);
+            }
         }
 
         ctx.restore();
