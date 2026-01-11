@@ -1,4 +1,5 @@
 export interface TeamInfo {
+    id?: string;
     dept: string;
     leader: string;
     country: string;
@@ -28,6 +29,10 @@ export interface Question {
     type: 'scale' | 'text' | 'multi_select';
     text: string;
     options?: string[];
+    is_hidden?: boolean;
+    sort_order?: number;
+    role?: string;
+    question_text?: string;
 }
 
 export const COMMON_SHARED_QUESTIONS: Question[] = [
@@ -64,12 +69,13 @@ export const COMMON_SHARED_QUESTIONS: Question[] = [
 ];
 
 export const MISSIONARY_QUESTIONS: Question[] = [
-    { id: 'q1', type: 'scale', text: '1-1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
+    { id: 'q1', type: 'scale', text: '1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
     { id: 'q1_1', type: 'text', text: '1-1. 영적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?' },
     { id: 'q2', type: 'scale', text: '2. 이번에 방문한 단기선교팀이 사역적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)' },
     { id: 'q2_1', type: 'text', text: '2-1. 사역적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?' },
     { id: 'q3', type: 'scale', text: '3. 사전에 단기선교팀과의 소통은 얼만큼 효과적으로 진행되었는가? (1~7점)' },
     { id: 'q3_1', type: 'text', text: '3-1. 효과적인 소통을 위해 보완해야 할 부분은 무엇인가?' },
+    { id: 'q4', type: 'scale', text: '4. 단기선교가 현재 섬기시는 사역에 어느 정도 도움이 된다고 느끼십니까? (1~7점)' },
     { id: 'q4_1', type: 'text', text: '4-1. 단기선교팀을 통해 사역에 도움이 필요한 부분이 있다면 무엇인가요?' },
     { id: 'q5', type: 'text', text: '5. 단기선교팀 방문으로 인한 선교사님이 느끼는 어려움(애로사항)은 어떤 것이 있는지?' },
     { id: 'q6', type: 'text', text: '6. 내년에도 같은 단기선교팀이 온다면, 어떤 부분을 보완해서 오면 좋겠습니까?' },
@@ -78,6 +84,7 @@ export const MISSIONARY_QUESTIONS: Question[] = [
 ];
 
 export const LEADER_QUESTIONS: Question[] = [
+    { id: 'l_pre', type: 'scale', text: 'I. 사전모임 준비: 1. 준비를 위한 사전 모임 횟수나 내용, 분위기는 어떻다고 생각되는가? (1~7점)' },
     { id: 'l1', type: 'text', text: '1. 만약에 내년에도 단기선교팀이 같은 사역지를 방문한다면 어떤 부분을 보완하기 원하는가?' },
     { id: 'l2', type: 'text', text: '2. 사전에 현장 선교사님과의 소통은 얼만큼 효과적으로 진행되었는가? 보완되어야 한다면 어떤 부분인가?' },
     ...COMMON_SHARED_QUESTIONS
@@ -85,6 +92,13 @@ export const LEADER_QUESTIONS: Question[] = [
 
 export const TEAM_QUESTIONS: Question[] = [
     { id: 't_pre', type: 'scale', text: 'I. 사전모임 준비: 1. 준비를 위한 사전 모임 횟수나 내용, 분위기는 어떻다고 생각되는가?(7점)' },
+    { id: 't_pre_1_reason', type: 'text', text: '1번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 't_pre_2', type: 'scale', text: '2. 모임과 준비를 시작하는 시기는 적절했다고 생각되는가?(7점)' },
+    { id: 't_pre_2_reason', type: 'text', text: '2번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 't_pre_3', type: 'text', text: '3. 기타 사전 모임 및 준비에 대한 조언은?' },
+    { id: 't_school', type: 'scale', text: '4. 단기선교학교는 도움이 되었다고 생각하는가?(7점)' },
+    { id: 't_school_reason', type: 'text', text: '4번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 't_school_advice', type: 'text', text: '5. 기타 단기선교학교에 대한 조언은?' },
     { id: 't1', type: 'scale', text: '팀원1. 단기선교팀의 사역을 위한 현지 교회의 준비는 대체로 어떻다고 생각되는가?(7점)' },
     { id: 't1_1', type: 'text', text: '팀원1. 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
     { id: 't2', type: 'scale', text: '팀원2. 이번 단기선교 일정은 대체로 어떻다고 생각되는가?(7점)' },
@@ -106,4 +120,23 @@ export const TEAM_QUESTIONS: Question[] = [
         ]
     },
     ...COMMON_SHARED_QUESTIONS
+];
+
+const mapToDbQuestion = (q: any, role: string, index: number) => ({
+    id: q.id,
+    role: role,
+    type: q.type,
+    question_text: q.text,
+    options: q.options || null,
+    sort_order: (index + 1) * 10,
+    is_hidden: false
+});
+
+const commonIds = new Set(COMMON_SHARED_QUESTIONS.map(q => q.id));
+
+export const INITIAL_QUESTIONS = [
+    ...COMMON_SHARED_QUESTIONS.map((q, i) => mapToDbQuestion(q, 'common', i)),
+    ...MISSIONARY_QUESTIONS.map((q, i) => mapToDbQuestion(q, 'missionary', i)),
+    ...LEADER_QUESTIONS.filter(q => !commonIds.has(q.id)).map((q, i) => mapToDbQuestion(q, 'leader', i)),
+    ...TEAM_QUESTIONS.filter(q => !commonIds.has(q.id)).map((q, i) => mapToDbQuestion(q, 'team_member', i)),
 ];

@@ -1,9 +1,9 @@
-import SurveyCanvas from '@/components/SurveyCanvas';
+import SurveyContainer from '@/components/survey/SurveyContainer';
 
 export default function Home() {
   return (
-    <main>
-      <SurveyCanvas />
+    <main className="w-full min-h-screen bg-white">
+      <SurveyContainer />
     </main>
   );
 }

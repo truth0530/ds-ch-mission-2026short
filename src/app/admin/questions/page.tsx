@@ -1,249 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-const INITIAL_QUESTIONS = [
-    {
-        "id": "c1",
-        "role": "common",
-        "type": "multi_select",
-        "question_text": "공통1. 현지사역을 진행하면서 있어서 가장 어려웠던 점은 무엇인가? (중복선택)",
-        "options": [
-            "1) 인력 부족",
-            "2) 전문성(언어 등) 부족",
-            "3) 재정 부족",
-            "4) 시설 및 장비 부족",
-            "5) 사전 정보(숙소, 교통, 치안, 날씨 등) 부족",
-            "6) 사람들과의 관계 (팀원, 인솔자, 현지인, 선교사 등)",
-            "7) 현지에서의 전도 방법",
-            "기타"
-        ],
-        "sort_order": 100
-    },
-    {
-        "id": "c2",
-        "role": "common",
-        "type": "multi_select",
-        "question_text": "공통2. 현지 선교사와 교회에 대한 지원, 관리를 잘 하기 위해 도움이 가장 절실히 필요한 분야는? (중복선택)",
-        "options": [
-            "1) 선교사 훈련",
-            "2) 선교사 돌봄",
-            "3) 선교사를 보조하는 전문 인력 양성",
-            "4) 선교회간 협력 및 소통",
-            "5) 지역 교회 후원 기반 확충",
-            "6) 국제적인 협력 관계 구축",
-            "기타"
-        ],
-        "sort_order": 110
-    },
-    {
-        "id": "c3",
-        "role": "common",
-        "type": "text",
-        "question_text": "공통3. 그 밖에 더 나은 단기선교를 위해 필요하다고 생각하는 것이나 선교회에 하고 싶은 말은?",
-        "options": null,
-        "sort_order": 120
-    },
-    {
-        "id": "q1",
-        "role": "missionary",
-        "type": "scale",
-        "question_text": "1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)",
-        "options": null,
-        "sort_order": 10
-    },
-    {
-        "id": "q1_1",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "1-1. 영적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?",
-        "options": null,
-        "sort_order": 20
-    },
-    {
-        "id": "q2",
-        "role": "missionary",
-        "type": "scale",
-        "question_text": "2. 이번에 방문한 단기선교팀이 사역적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)",
-        "options": null,
-        "sort_order": 30
-    },
-    {
-        "id": "q2_1",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "2-1. 사역적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?",
-        "options": null,
-        "sort_order": 40
-    },
-    {
-        "id": "q3",
-        "role": "missionary",
-        "type": "scale",
-        "question_text": "3. 사전에 단기선교팀과의 소통은 얼만큼 효과적으로 진행되었는가? (1~7점)",
-        "options": null,
-        "sort_order": 50
-    },
-    {
-        "id": "q3_1",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "3-1. 효과적인 소통을 위해 보완해야 할 부분은 무엇인가?",
-        "options": null,
-        "sort_order": 60
-    },
-    {
-        "id": "q4_1",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "4-1. 단기선교팀을 통해 사역에 도움이 필요한 부분이 있다면 무엇인가요?",
-        "options": null,
-        "sort_order": 70
-    },
-    {
-        "id": "q5",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "5. 단기선교팀 방문으로 인한 선교사님이 느끼는 어려움(애로사항)은 어떤 것이 있는지?",
-        "options": null,
-        "sort_order": 80
-    },
-    {
-        "id": "q6",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "6. 내년에도 같은 단기선교팀이 온다면, 어떤 부분을 보완해서 오면 좋겠습니까?",
-        "options": null,
-        "sort_order": 90
-    },
-    {
-        "id": "q7",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "7. 이번 단기선교 기간 동안 특별히 소개하고 싶은 에피소드가 있다면?",
-        "options": null,
-        "sort_order": 95
-    },
-    {
-        "id": "q8",
-        "role": "missionary",
-        "type": "text",
-        "question_text": "8. 그 밖에 선교회가 더 도와주기를 원하는 부분이 있다면?",
-        "options": null,
-        "sort_order": 98
-    },
-    {
-        "id": "l1",
-        "role": "leader",
-        "type": "text",
-        "question_text": "1. 만약에 내년에도 단기선교팀이 같은 사역지를 방문한다면 어떤 부분을 보완하기 원하는가?",
-        "options": null,
-        "sort_order": 10
-    },
-    {
-        "id": "l2",
-        "role": "leader",
-        "type": "text",
-        "question_text": "2. 사전에 현장 선교사님과의 소통은 얼만큼 효과적으로 진행되었는가? 보완되어야 한다면 어떤 부분인가?",
-        "options": null,
-        "sort_order": 20
-    },
-    {
-        "id": "t_pre",
-        "role": "team_member",
-        "type": "scale",
-        "question_text": "I. 사전모임 준비: 1. 준비를 위한 사전 모임 횟수나 내용, 분위기는 어떻다고 생각되는가?(7점)",
-        "options": null,
-        "sort_order": 10
-    },
-    {
-        "id": "t1",
-        "role": "team_member",
-        "type": "scale",
-        "question_text": "팀원1. 단기선교팀의 사역을 위한 현지 교회의 준비는 대체로 어떻다고 생각되는가?(7점)",
-        "options": null,
-        "sort_order": 20
-    },
-    {
-        "id": "t1_1",
-        "role": "team_member",
-        "type": "text",
-        "question_text": "팀원1. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
-        "options": null,
-        "sort_order": 30
-    },
-    {
-        "id": "t2",
-        "role": "team_member",
-        "type": "scale",
-        "question_text": "팀원2. 이번 단기선교 일정은 대체로 어떻다고 생각되는가?(7점)",
-        "options": null,
-        "sort_order": 40
-    },
-    {
-        "id": "t2_1",
-        "role": "team_member",
-        "type": "text",
-        "question_text": "팀원2. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
-        "options": null,
-        "sort_order": 50
-    },
-    {
-        "id": "t3",
-        "role": "team_member",
-        "type": "scale",
-        "question_text": "팀원3. 이번에 갔던 사역지를 중장기적으로 계속 방문할 계획이 있는가?(7점)",
-        "options": null,
-        "sort_order": 60
-    },
-    {
-        "id": "t3_1",
-        "role": "team_member",
-        "type": "text",
-        "question_text": "팀원3. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
-        "options": null,
-        "sort_order": 70
-    },
-    {
-        "id": "t4",
-        "role": "team_member",
-        "type": "multi_select",
-        "question_text": "팀원4. 단기선교 전반에 대해 평가할 때 가장 긍정적인 부분은?(중복선택)",
-        "options": [
-            "1) 현지 선교지/선교사에 대한 이해",
-            "2) 선교하시는 하나님을 직접 체험",
-            "3) 팀원 간의 유대와 친목",
-            "4) 생명사역자로 선교적 삶을 살기로 다짐",
-            "5) 마음에 품고 기도할 선교지/선교사 결정",
-            "6) 현지인 만나서 직접 복음 전파 경험",
-            "기타"
-        ],
-        "sort_order": 80
-    }
-];
-
-// Lazy client initialization to prevent build-time crashes
-let sbClientInstance: any = null;
-const getSbClient = () => {
-    if (!sbClientInstance && SB_URL && SB_KEY) {
-        sbClientInstance = createClient(SB_URL, SB_KEY);
-    }
-    return sbClientInstance;
-};
-
-interface Question {
-    id: string;
-    role: string;
-    type: 'scale' | 'text' | 'multi_select';
-    question_text: string;
-    options: string[] | null;
-    sort_order: number;
-    is_hidden: boolean;
-}
+import { useRouter } from 'next/navigation';
+import { getSbClient } from '@/lib/supabase';
+import { INITIAL_QUESTIONS, Question, MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
 
 interface AdminUser {
     email: string;
@@ -252,7 +12,8 @@ interface AdminUser {
 }
 
 export default function AdminQuestionsPage() {
-    const [activeTab, setActiveTab] = useState<'questions' | 'admins'>('questions');
+    const router = useRouter();
+    const [activeTab, setActiveTab] = useState<'questions' | 'admins' | 'teams'>('questions');
     const [questions, setQuestions] = useState<Question[]>([]);
     const [admins, setAdmins] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
@@ -263,6 +24,96 @@ export default function AdminQuestionsPage() {
     // Question Edit State
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<Question>>({});
+
+    // Team State
+    const [teams, setTeams] = useState<TeamInfo[]>([]);
+    const [editingTeam, setEditingTeam] = useState<TeamInfo | null>(null);
+    const [teamForm, setTeamForm] = useState<Partial<TeamInfo>>({});
+
+    // Fetch Teams
+    const fetchTeams = async () => {
+        const client = getSbClient();
+        if (!client) return;
+        const { data, error } = await client
+            .from('mission_teams')
+            .select('*')
+            .order('country', { ascending: true });
+        if (!error) setTeams(data || []);
+    };
+
+    const handleInitialTeamsLoad = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: '팀 데이터 초기화',
+            message: '기본 팀 데이터를 DB에 로드하시겠습니까? (중복 시 추가됨)',
+            onConfirm: async () => {
+                const client = getSbClient();
+                if (!client) return;
+
+                const { error } = await client
+                    .from('mission_teams')
+                    .insert(MISSION_TEAMS);
+
+                if (error) showNotification('팀 데이터 로드 실패: ' + error.message, 'error');
+                else {
+                    fetchTeams();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    showNotification('팀 데이터가 로드되었습니다.', 'success');
+                }
+            }
+        });
+    };
+
+    const handleSaveTeam = async () => {
+        const client = getSbClient();
+        if (!client) return;
+
+        const teamData = {
+            dept: teamForm.dept,
+            leader: teamForm.leader,
+            country: teamForm.country,
+            missionary: teamForm.missionary,
+            period: teamForm.period,
+            members: teamForm.members,
+            content: teamForm.content
+        };
+
+        let error;
+        if (editingTeam && (editingTeam as any).id) {
+            const { error: updateError } = await client
+                .from('mission_teams')
+                .update(teamData)
+                .eq('id', (editingTeam as any).id);
+            error = updateError;
+        } else {
+            const { error: insertError } = await client
+                .from('mission_teams')
+                .insert([teamData]);
+            error = insertError;
+        }
+
+        if (error) {
+            showNotification('팀 저장 실패: ' + error.message, 'error');
+        } else {
+            setEditingTeam(null);
+            setTeamForm({});
+            fetchTeams();
+            showNotification('팀이 저장되었습니다.', 'success');
+        }
+    };
+
+    const handleDeleteTeam = async (id: string) => {
+        if (!confirm('팀을 삭제하시겠습니까?')) return;
+        const client = getSbClient();
+        if (!client) return;
+
+        const { error } = await client.from('mission_teams').delete().eq('id', id);
+        if (error) showNotification('삭제 실패: ' + error.message, 'error');
+        else {
+            fetchTeams();
+            showNotification('팀이 삭제되었습니다.', 'success');
+        }
+    };
 
     // Admin Add State
     const [newAdminEmail, setNewAdminEmail] = useState('');
@@ -286,6 +137,13 @@ export default function AdminQuestionsPage() {
         return () => subscription.unsubscribe();
     }, []);
 
+    useEffect(() => {
+        if (isAuthorized) {
+            fetchQuestions();
+            fetchAdmins();
+            fetchTeams();
+        }
+    }, [isAuthorized]);
 
     const checkAuthorization = async (client: any, currentUser: any) => {
         const { data, error } = await client
@@ -297,8 +155,6 @@ export default function AdminQuestionsPage() {
         if (data || currentUser.email === 'truth0530@gmail.com') {
             setUser(currentUser);
             setIsAuthorized(true);
-            fetchQuestions();
-            fetchAdmins();
         } else {
             console.warn('Unauthorized email:', currentUser.email);
             setIsAuthorized(false);
@@ -320,7 +176,19 @@ export default function AdminQuestionsPage() {
                 redirectTo: window.location.origin + '/admin/questions'
             }
         });
-        if (error) alert('로그인 중 오류: ' + error.message);
+        if (error) showNotification('로그인 중 오류: ' + error.message, 'error');
+    };
+
+    // Notification State
+    const [notification, setNotification] = useState<{
+        message: string;
+        type: 'success' | 'error';
+        isVisible: boolean;
+    }>({ message: '', type: 'success', isVisible: false });
+
+    const showNotification = (message: string, type: 'success' | 'error') => {
+        setNotification({ message, type, isVisible: true });
+        setTimeout(() => setNotification(prev => ({ ...prev, isVisible: false })), 3000);
     };
 
     const handleLogout = async () => {
@@ -364,8 +232,12 @@ export default function AdminQuestionsPage() {
             .update(editForm)
             .eq('id', id);
 
-        if (error) alert('저장 실패: ' + error.message);
-        else { setEditingId(null); fetchQuestions(); }
+        if (error) showNotification('저장 실패: ' + error.message, 'error');
+        else {
+            setEditingId(null);
+            fetchQuestions();
+            showNotification('문항이 수정되었습니다.', 'success');
+        }
     };
 
     const handleToggleHidden = async (q: Question) => {
@@ -389,18 +261,37 @@ export default function AdminQuestionsPage() {
                 role: 'common',
                 type: 'text',
                 question_text: '새로운 문항을 입력하세요',
-                sort_order: (questions.length > 0 ? Math.max(...questions.map(q => q.sort_order)) : 0) + 10,
+                sort_order: (questions.length > 0 ? Math.max(...questions.map(q => q.sort_order || 0)) : 0) + 10,
                 is_hidden: false
             }]);
-        if (!error) { setEditingId(newId); setEditForm({ question_text: '새로운 문항을 입력하세요', role: 'common', type: 'text' }); fetchQuestions(); }
+        if (!error) {
+            setEditingId(newId);
+            setEditForm({ question_text: '새로운 문항을 입력하세요', role: 'common', type: 'text' });
+            fetchQuestions();
+            showNotification('새 문항이 추가되었습니다.', 'success');
+        } else {
+            showNotification('추가 실패: ' + error.message, 'error');
+        }
     };
 
     const handleDeleteQuestion = async (id: string) => {
+        // Use confirmModal instead of window.confirm for consistency? 
+        // For now, let's just make sure we don't use alert on error.
+        // Actually, let's keep native confirm for delete for speed, unless user complained about that too.
+        // User specifically complained about "Initial Load" flickering.
+        // Let's replace ONLY error alerts with notifications for now to be safe and fast.
+
+        if (!confirm('문항을 삭제하시겠습니까?')) return;
+
         const client = getSbClient();
         if (!client) return;
-        if (!confirm('문항을 삭제하시겠습니까?')) return;
         const { error } = await client.from('survey_questions').delete().eq('id', id);
-        if (!error) fetchQuestions();
+        if (!error) {
+            fetchQuestions();
+            showNotification('문항이 삭제되었습니다.', 'success');
+        } else {
+            showNotification('삭제 실패: ' + error.message, 'error');
+        }
     };
 
     const handleAddAdmin = async () => {
@@ -410,31 +301,59 @@ export default function AdminQuestionsPage() {
             .from('admin_users')
             .insert([{ email: newAdminEmail, added_by: user.email }]);
 
-        if (error) alert('관리자 추가 실패: ' + error.message);
-        else { setNewAdminEmail(''); fetchAdmins(); }
+        if (error) showNotification('관리자 추가 실패: ' + error.message, 'error');
+        else {
+            setNewAdminEmail('');
+            fetchAdmins();
+            showNotification('관리자가 추가되었습니다.', 'success');
+        }
     };
 
     const handleDeleteAdmin = async (email: string) => {
         const client = getSbClient();
         if (!client) return;
-        if (email === user.email) { alert('자기 자신은 삭제할 수 없습니다.'); return; }
+        if (email === user.email) { showNotification('자기 자신은 삭제할 수 없습니다.', 'error'); return; }
+
         if (!confirm(`${email} 관리자를 권한 해제하시겠습니까?`)) return;
+
         const { error } = await client.from('admin_users').delete().eq('email', email);
-        if (error) alert('삭제 실패: ' + error.message);
-        else fetchAdmins();
+        if (error) showNotification('삭제 실패: ' + error.message, 'error');
+        else {
+            fetchAdmins();
+            showNotification('관리자 권한이 해제되었습니다.', 'success');
+        }
     };
 
-    const handleLoadInitialData = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        if (!confirm('초기 데이터를 불러오시겠습니까? 기존 데이터에 추가됩니다.')) return;
+    // Confirmation Modal State
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
 
-        const { error } = await client
-            .from('survey_questions')
-            .upsert(INITIAL_QUESTIONS.map(q => ({ ...q, is_hidden: false })));
+    const handleLoadInitialData = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: '초기 데이터 로드',
+            message: '초기 데이터를 불러오시겠습니까? 기존 데이터에 추가됩니다. (중복 방지됨)',
+            onConfirm: async () => {
+                const client = getSbClient();
+                if (!client) return;
 
-        if (error) alert('초기 데이터 로드 실패: ' + error.message);
-        else fetchQuestions();
+                const { error } = await client
+                    .from('survey_questions')
+                    .upsert(INITIAL_QUESTIONS.map(q => ({ ...q, is_hidden: false })));
+
+                if (error) {
+                    showNotification('초기 데이터 로드 실패: ' + error.message, 'error');
+                } else {
+                    fetchQuestions();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    showNotification('초기 데이터가 성공적으로 로드되었습니다.', 'success');
+                }
+            }
+        });
     };
 
     if (authLoading) {
@@ -482,7 +401,41 @@ export default function AdminQuestionsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans">
+        <div className="min-h-screen bg-gray-50 font-sans relative">
+            {/* Notification Toast */}
+            {notification.isVisible && (
+                <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[70] px-6 py-3 rounded-2xl shadow-2xl font-bold text-white animate-in slide-in-from-top-4 duration-300 ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-500'}`}>
+                    {notification.message}
+                </div>
+            )}
+
+            {/* Confirmation Modal */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} />
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-xl font-black text-gray-900 mb-2">{confirmModal.title}</h3>
+                        <p className="text-gray-500 font-medium mb-8 leading-relaxed">
+                            {confirmModal.message}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-colors"
+                            >
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Nav */}
             <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 px-6 py-4">
                 <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -503,6 +456,12 @@ export default function AdminQuestionsPage() {
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'questions' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 문항 관리
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('teams')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'teams' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                팀 관리
                             </button>
                             <button
                                 onClick={() => setActiveTab('admins')}
@@ -590,8 +549,30 @@ export default function AdminQuestionsPage() {
                                                                         <option value="multi_select">Multi-Select</option>
                                                                     </select>
                                                                 </div>
-                                                                <textarea value={editForm.question_text} onChange={e => setEditForm({ ...editForm, question_text: e.target.value })} className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 min-h-[100px]" />
-                                                                <div className="flex items-center justify-end gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={editForm.question_text}
+                                                                    onChange={e => setEditForm({ ...editForm, question_text: e.target.value })}
+                                                                    className="w-full bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500"
+                                                                />
+
+                                                                {/* Options Editor */}
+                                                                {(editForm.type === 'multi_select' || (q.options && Array.isArray(q.options))) && (
+                                                                    <div>
+                                                                        <label className="block text-xs font-bold text-gray-400 mb-1">Options (한 줄에 하나씩 입력)</label>
+                                                                        <textarea
+                                                                            value={Array.isArray(editForm.options) ? editForm.options.join('\n') : ''}
+                                                                            onChange={e => setEditForm({
+                                                                                ...editForm,
+                                                                                options: e.target.value.split('\n').filter(line => line.trim() !== '')
+                                                                            })}
+                                                                            className="w-full bg-gray-50 border-none rounded-xl p-3 font-bold text-sm h-32 focus:ring-2 focus:ring-blue-500"
+                                                                            placeholder="옵션 1&#10;옵션 2"
+                                                                        />
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex justify-end gap-2 pt-2">
                                                                     <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-gray-600">취소</button>
                                                                     <button onClick={() => handleSaveQuestion(q.id)} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-100">저장</button>
                                                                 </div>
@@ -606,6 +587,11 @@ export default function AdminQuestionsPage() {
                                                                         <span className="text-[9px] font-mono font-bold text-gray-300">#{q.id}</span>
                                                                     </div>
                                                                     <p className="text-gray-800 font-bold leading-relaxed">{q.question_text}</p>
+                                                                    {q.options && q.options.length > 0 && (
+                                                                        <div className="mt-2 text-xs text-gray-500">
+                                                                            Options: {q.options.join(', ')}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                                                                     <button onClick={() => handleToggleHidden(q)} className={`text-xs font-black uppercase tracking-widest ${q.is_hidden ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'}`}>
@@ -624,6 +610,85 @@ export default function AdminQuestionsPage() {
                                         </div>
                                     );
                                 })}
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'teams' ? (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 pb-8">
+                            <div>
+                                <h1 className="text-4xl font-black text-gray-900">Mission Teams</h1>
+                                <p className="text-gray-500 mt-2 font-medium">선교팀 정보를 관리합니다.</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleInitialTeamsLoad}
+                                    className="px-6 py-4 bg-green-600 text-white rounded-2xl font-black hover:bg-green-700 active:scale-95 transition-all shadow-xl shadow-green-100 flex items-center justify-center gap-2"
+                                >
+                                    초기 팀 데이터 로드
+                                </button>
+                                <button
+                                    onClick={() => { setEditingTeam(null); setTeamForm({}); }}
+                                    className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                                    새 팀 추가
+                                </button>
+                            </div>
+                        </div>
+
+                        {editingTeam !== null || Object.keys(teamForm).length > 0 ? (
+                            <div className="bg-white rounded-3xl p-6 shadow-xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                                <h2 className="text-2xl font-black text-gray-900 mb-4">{editingTeam ? '팀 수정' : '새 팀 추가'}</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input type="text" placeholder="국가" value={teamForm.country || ''} onChange={e => setTeamForm({ ...teamForm, country: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" placeholder="팀명 (Dept)" value={teamForm.dept || ''} onChange={e => setTeamForm({ ...teamForm, dept: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" placeholder="선교사" value={teamForm.missionary || ''} onChange={e => setTeamForm({ ...teamForm, missionary: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" placeholder="팀장" value={teamForm.leader || ''} onChange={e => setTeamForm({ ...teamForm, leader: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" placeholder="기간 (예: 2024.07.01-07.10)" value={teamForm.period || ''} onChange={e => setTeamForm({ ...teamForm, period: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" placeholder="멤버 (쉼표로 구분)" value={teamForm.members || ''} onChange={e => setTeamForm({ ...teamForm, members: e.target.value })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500" />
+                                    <textarea placeholder="내용" value={teamForm.content || ''} onChange={e => setTeamForm({ ...teamForm, content: e.target.value })} className="md:col-span-2 bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 min-h-[100px]" />
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button onClick={() => { setEditingTeam(null); setTeamForm({}); }} className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-gray-600">취소</button>
+                                    <button onClick={handleSaveTeam} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-100">저장</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-[40px] shadow-2xl shadow-gray-200/40 border border-gray-100 overflow-hidden">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="bg-gray-50 border-b border-gray-100">
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">국가</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">팀명</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">선교사</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">팀장</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">기간</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">멤버</th>
+                                            <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">내용</th>
+                                            <th className="px-8 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">액션</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {teams.map(team => (
+                                            <tr key={team.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.country}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.dept}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.missionary}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.leader}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.period}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.members}</td>
+                                                <td className="px-8 py-6 text-sm font-bold text-gray-900">{team.content}</td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        <button onClick={() => { setEditingTeam(team); setTeamForm(team); }} className="text-xs font-black text-gray-300 hover:text-blue-600 transition-colors uppercase tracking-widest">Edit</button>
+                                                        <button onClick={() => team.id && handleDeleteTeam(team.id)} className={`text-xs font-black uppercase tracking-widest transition-colors ${team.id ? 'text-gray-200 hover:text-red-500' : 'text-gray-100 cursor-not-allowed'}`}>Del</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
                     </div>

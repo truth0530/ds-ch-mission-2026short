@@ -30,10 +30,14 @@ interface Evaluation {
     created_at: string;
 }
 
+import { MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
+
 interface Stats {
     total: number;
     byRole: { missionary: number; leader: number; team_member: number };
-    byTeam: Record<string, { missionary: number; leader: number; team_member: number }>;
+    teamMemberByTeam: Record<string, number>;
+    missionaries: Evaluation[];
+    leaders: Evaluation[];
 }
 
 export default function AdminDashboard() {
@@ -43,7 +47,13 @@ export default function AdminDashboard() {
     const [isAuthorized, setIsAuthorized] = useState(false);
 
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-    const [stats, setStats] = useState<Stats>({ total: 0, byRole: { missionary: 0, leader: 0, team_member: 0 }, byTeam: {} });
+    const [stats, setStats] = useState<Stats>({
+        total: 0,
+        byRole: { missionary: 0, leader: 0, team_member: 0 },
+        teamMemberByTeam: {},
+        missionaries: [],
+        leaders: []
+    });
 
     // Filters
     const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -96,7 +106,7 @@ export default function AdminDashboard() {
         if (data || currentUser.email === 'truth0530@gmail.com') {
             setUser(currentUser);
             setIsAuthorized(true);
-            fetchEvaluations();
+            fetchData();
         } else {
             setIsAuthorized(false);
             setUser(currentUser);
@@ -121,45 +131,63 @@ export default function AdminDashboard() {
         await client.auth.signOut();
         window.location.reload();
     };
+    const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS); // Default to static
 
-    const fetchEvaluations = async () => {
+    // Fetch Data
+    const fetchData = async () => {
+        setLoading(true);
         const client = getSbClient();
         if (!client) return;
-        setLoading(true);
 
+        // Fetch Teams
+        const { data: teamData } = await client.from('mission_teams').select('*').order('country', { ascending: true });
+        const currentTeams = teamData && teamData.length > 0 ? teamData : MISSION_TEAMS;
+        setTeams(currentTeams);
+
+        // Fetch Evaluations
         const { data, error } = await client
             .from('mission_evaluations')
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (!error && data) {
-            setEvaluations(data);
-            calculateStats(data);
+        if (error) {
+            console.error('Data Fetch Error:', error);
+            alert(`데이터 로드 실패: ${error.message || JSON.stringify(error)}`);
+        } else {
+            setEvaluations(data as Evaluation[]);
+            calculateStats(data as Evaluation[], currentTeams);
         }
         setLoading(false);
     };
 
-    const calculateStats = (data: Evaluation[]) => {
+    const calculateStats = (data: Evaluation[], currentTeams: TeamInfo[] = teams) => {
         const stats: Stats = {
             total: data.length,
             byRole: { missionary: 0, leader: 0, team_member: 0 },
-            byTeam: {}
+            teamMemberByTeam: {},
+            missionaries: [],
+            leaders: []
         };
+
+        // Initialize all teams with 0
+        currentTeams.forEach(t => {
+            if (t.missionary) stats.teamMemberByTeam[t.missionary] = 0;
+        });
 
         data.forEach(evaluation => {
             // Count by role
-            if (evaluation.role === '선교사') stats.byRole.missionary++;
-            else if (evaluation.role === '인솔자') stats.byRole.leader++;
-            else if (evaluation.role === '단기선교 팀원') stats.byRole.team_member++;
-
-            // Count by team
-            const teamKey = evaluation.team_missionary || 'Unknown';
-            if (!stats.byTeam[teamKey]) {
-                stats.byTeam[teamKey] = { missionary: 0, leader: 0, team_member: 0 };
+            if (evaluation.role === '선교사') {
+                stats.byRole.missionary++;
+                stats.missionaries.push(evaluation);
+            } else if (evaluation.role === '인솔자') {
+                stats.byRole.leader++;
+                stats.leaders.push(evaluation);
+            } else if (evaluation.role === '단기선교 팀원') {
+                stats.byRole.team_member++;
+                // Count team members by team
+                const teamKey = evaluation.team_missionary || 'Unknown';
+                stats.teamMemberByTeam[teamKey] = (stats.teamMemberByTeam[teamKey] || 0) + 1;
             }
-            if (evaluation.role === '선교사') stats.byTeam[teamKey].missionary++;
-            else if (evaluation.role === '인솔자') stats.byTeam[teamKey].leader++;
-            else if (evaluation.role === '단기선교 팀원') stats.byTeam[teamKey].team_member++;
         });
 
         setStats(stats);
@@ -205,16 +233,21 @@ export default function AdminDashboard() {
         const client = getSbClient();
         if (!client) return;
 
-        const { error } = await client
+        const { error, count } = await client
             .from('mission_evaluations')
-            .delete()
+            .delete({ count: 'exact' })
             .eq('id', id);
 
-        if (!error) {
-            fetchEvaluations();
-            setSelectedEval(null);
-        } else {
+        if (error) {
+            console.error('Delete Error:', error);
             alert('삭제 실패: ' + error.message);
+        } else if (count === 0) {
+            console.warn('Delete Count 0. ID:', id);
+            alert('삭제된 데이터가 없습니다. 권한이 없거나 이미 삭제되었을 수 있습니다.');
+        } else {
+            alert('삭제되었습니다.');
+            fetchData();
+            setSelectedEval(null);
         }
     };
 
@@ -335,48 +368,90 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Team Breakdown */}
-                <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
-                    <h2 className="text-2xl font-black text-gray-900 mb-6">팀별 제출 현황</h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b-2 border-gray-100">
-                                    <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">팀 (선교사)</th>
-                                    <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">선교사</th>
-                                    <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">인솔자</th>
-                                    <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">팀원</th>
-                                    <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">합계</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {Object.entries(stats.byTeam).map(([team, counts]) => (
-                                    <tr key={team} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="py-4 px-4 font-bold text-gray-900">{team}</td>
-                                        <td className="py-4 px-4 text-center">
-                                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold ${counts.missionary > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {counts.missionary}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-4 text-center">
-                                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold ${counts.leader > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {counts.leader}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-4 text-center">
-                                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold ${counts.team_member > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {counts.team_member}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-4 text-center">
-                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold bg-blue-100 text-blue-700">
-                                                {counts.missionary + counts.leader + counts.team_member}
-                                            </span>
-                                        </td>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Team Member Breakdown */}
+                    <div className="bg-white rounded-3xl p-8 border-2 border-gray-100 h-full">
+                        <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                            <span className="w-2 h-8 bg-purple-500 rounded-full"></span>
+                            팀원별 제출 현황
+                        </h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b-2 border-gray-100">
+                                        <th className="text-left py-3 px-2 text-xs font-black text-gray-400 uppercase tracking-widest">팀 (선교사)</th>
+                                        <th className="text-center py-3 px-2 text-xs font-black text-gray-400 uppercase tracking-widest">제출 수</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {teams.map((team) => {
+                                        const count = stats.teamMemberByTeam[team.missionary] || 0;
+                                        return (
+                                            <tr key={team.id || `${team.country}-${team.missionary}-${team.leader}`} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="py-3 px-2">
+                                                    <div className="font-bold text-gray-900">{team.missionary}</div>
+                                                    <div className="text-xs text-gray-400">{team.country}</div>
+                                                </td>
+                                                <td className="py-3 px-2 text-center">
+                                                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold ${count > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                        {count}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Missionary & Leader Breakdown */}
+                    <div className="space-y-8">
+                        {/* Missionary List */}
+                        <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
+                            <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                                <span className="w-2 h-8 bg-amber-500 rounded-full"></span>
+                                선교사 제출 명단
+                            </h2>
+                            {stats.missionaries.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {stats.missionaries.map(m => (
+                                        <li key={m.id} className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl">
+                                            <div>
+                                                <div className="font-bold text-gray-900">{m.respondent_name || '익명'}</div>
+                                                <div className="text-xs text-gray-500">{new Date(m.submission_date).toLocaleDateString()}</div>
+                                            </div>
+                                            <button onClick={() => setSelectedEval(m)} className="text-xs font-bold text-amber-600 hover:underline">보기</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-center text-gray-400 font-bold py-4">아직 제출된 응답이 없습니다.</p>
+                            )}
+                        </div>
+
+                        {/* Leader List */}
+                        <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
+                            <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                                <span className="w-2 h-8 bg-green-500 rounded-full"></span>
+                                인솔자 제출 명단
+                            </h2>
+                            {stats.leaders.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {stats.leaders.map(l => (
+                                        <li key={l.id} className="flex items-center justify-between p-3 bg-green-50/50 rounded-xl">
+                                            <div>
+                                                <div className="font-bold text-gray-900">{l.respondent_name || '익명'}</div>
+                                                <div className="text-xs text-gray-500">{new Date(l.submission_date).toLocaleDateString()}</div>
+                                            </div>
+                                            <button onClick={() => setSelectedEval(l)} className="text-xs font-bold text-green-600 hover:underline">보기</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-center text-gray-400 font-bold py-4">아직 제출된 응답이 없습니다.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
