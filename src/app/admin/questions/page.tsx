@@ -6,6 +6,226 @@ import { createClient } from '@supabase/supabase-js';
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+const INITIAL_QUESTIONS = [
+    {
+        "id": "c1",
+        "role": "common",
+        "type": "multi_select",
+        "question_text": "공통1. 현지사역을 진행하면서 있어서 가장 어려웠던 점은 무엇인가? (중복선택)",
+        "options": [
+            "1) 인력 부족",
+            "2) 전문성(언어 등) 부족",
+            "3) 재정 부족",
+            "4) 시설 및 장비 부족",
+            "5) 사전 정보(숙소, 교통, 치안, 날씨 등) 부족",
+            "6) 사람들과의 관계 (팀원, 인솔자, 현지인, 선교사 등)",
+            "7) 현지에서의 전도 방법",
+            "기타"
+        ],
+        "sort_order": 100
+    },
+    {
+        "id": "c2",
+        "role": "common",
+        "type": "multi_select",
+        "question_text": "공통2. 현지 선교사와 교회에 대한 지원, 관리를 잘 하기 위해 도움이 가장 절실히 필요한 분야는? (중복선택)",
+        "options": [
+            "1) 선교사 훈련",
+            "2) 선교사 돌봄",
+            "3) 선교사를 보조하는 전문 인력 양성",
+            "4) 선교회간 협력 및 소통",
+            "5) 지역 교회 후원 기반 확충",
+            "6) 국제적인 협력 관계 구축",
+            "기타"
+        ],
+        "sort_order": 110
+    },
+    {
+        "id": "c3",
+        "role": "common",
+        "type": "text",
+        "question_text": "공통3. 그 밖에 더 나은 단기선교를 위해 필요하다고 생각하는 것이나 선교회에 하고 싶은 말은?",
+        "options": null,
+        "sort_order": 120
+    },
+    {
+        "id": "q1",
+        "role": "missionary",
+        "type": "scale",
+        "question_text": "1. 이번에 방문한 단기선교팀이 영적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)",
+        "options": null,
+        "sort_order": 10
+    },
+    {
+        "id": "q1_1",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "1-1. 영적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?",
+        "options": null,
+        "sort_order": 20
+    },
+    {
+        "id": "q2",
+        "role": "missionary",
+        "type": "scale",
+        "question_text": "2. 이번에 방문한 단기선교팀이 사역적으로 어느 정도 준비되어 있다고 생각하는가? (1~7점)",
+        "options": null,
+        "sort_order": 30
+    },
+    {
+        "id": "q2_1",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "2-1. 사역적으로 이 정도 준비되어 있다고 생각하는 이유는 무엇인가?",
+        "options": null,
+        "sort_order": 40
+    },
+    {
+        "id": "q3",
+        "role": "missionary",
+        "type": "scale",
+        "question_text": "3. 사전에 단기선교팀과의 소통은 얼만큼 효과적으로 진행되었는가? (1~7점)",
+        "options": null,
+        "sort_order": 50
+    },
+    {
+        "id": "q3_1",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "3-1. 효과적인 소통을 위해 보완해야 할 부분은 무엇인가?",
+        "options": null,
+        "sort_order": 60
+    },
+    {
+        "id": "q4_1",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "4-1. 단기선교팀을 통해 사역에 도움이 필요한 부분이 있다면 무엇인가요?",
+        "options": null,
+        "sort_order": 70
+    },
+    {
+        "id": "q5",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "5. 단기선교팀 방문으로 인한 선교사님이 느끼는 어려움(애로사항)은 어떤 것이 있는지?",
+        "options": null,
+        "sort_order": 80
+    },
+    {
+        "id": "q6",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "6. 내년에도 같은 단기선교팀이 온다면, 어떤 부분을 보완해서 오면 좋겠습니까?",
+        "options": null,
+        "sort_order": 90
+    },
+    {
+        "id": "q7",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "7. 이번 단기선교 기간 동안 특별히 소개하고 싶은 에피소드가 있다면?",
+        "options": null,
+        "sort_order": 95
+    },
+    {
+        "id": "q8",
+        "role": "missionary",
+        "type": "text",
+        "question_text": "8. 그 밖에 선교회가 더 도와주기를 원하는 부분이 있다면?",
+        "options": null,
+        "sort_order": 98
+    },
+    {
+        "id": "l1",
+        "role": "leader",
+        "type": "text",
+        "question_text": "1. 만약에 내년에도 단기선교팀이 같은 사역지를 방문한다면 어떤 부분을 보완하기 원하는가?",
+        "options": null,
+        "sort_order": 10
+    },
+    {
+        "id": "l2",
+        "role": "leader",
+        "type": "text",
+        "question_text": "2. 사전에 현장 선교사님과의 소통은 얼만큼 효과적으로 진행되었는가? 보완되어야 한다면 어떤 부분인가?",
+        "options": null,
+        "sort_order": 20
+    },
+    {
+        "id": "t_pre",
+        "role": "team_member",
+        "type": "scale",
+        "question_text": "I. 사전모임 준비: 1. 준비를 위한 사전 모임 횟수나 내용, 분위기는 어떻다고 생각되는가?(7점)",
+        "options": null,
+        "sort_order": 10
+    },
+    {
+        "id": "t1",
+        "role": "team_member",
+        "type": "scale",
+        "question_text": "팀원1. 단기선교팀의 사역을 위한 현지 교회의 준비는 대체로 어떻다고 생각되는가?(7점)",
+        "options": null,
+        "sort_order": 20
+    },
+    {
+        "id": "t1_1",
+        "role": "team_member",
+        "type": "text",
+        "question_text": "팀원1. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
+        "options": null,
+        "sort_order": 30
+    },
+    {
+        "id": "t2",
+        "role": "team_member",
+        "type": "scale",
+        "question_text": "팀원2. 이번 단기선교 일정은 대체로 어떻다고 생각되는가?(7점)",
+        "options": null,
+        "sort_order": 40
+    },
+    {
+        "id": "t2_1",
+        "role": "team_member",
+        "type": "text",
+        "question_text": "팀원2. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
+        "options": null,
+        "sort_order": 50
+    },
+    {
+        "id": "t3",
+        "role": "team_member",
+        "type": "scale",
+        "question_text": "팀원3. 이번에 갔던 사역지를 중장기적으로 계속 방문할 계획이 있는가?(7점)",
+        "options": null,
+        "sort_order": 60
+    },
+    {
+        "id": "t3_1",
+        "role": "team_member",
+        "type": "text",
+        "question_text": "팀원3. 문항에서 해당 번호를 선택한 이유는 무엇인가?",
+        "options": null,
+        "sort_order": 70
+    },
+    {
+        "id": "t4",
+        "role": "team_member",
+        "type": "multi_select",
+        "question_text": "팀원4. 단기선교 전반에 대해 평가할 때 가장 긍정적인 부분은?(중복선택)",
+        "options": [
+            "1) 현지 선교지/선교사에 대한 이해",
+            "2) 선교하시는 하나님을 직접 체험",
+            "3) 팀원 간의 유대와 친목",
+            "4) 생명사역자로 선교적 삶을 살기로 다짐",
+            "5) 마음에 품고 기도할 선교지/선교사 결정",
+            "6) 현지인 만나서 직접 복음 전파 경험",
+            "기타"
+        ],
+        "sort_order": 80
+    }
+];
+
 // Lazy client initialization to prevent build-time crashes
 let sbClientInstance: any = null;
 const getSbClient = () => {
@@ -120,7 +340,10 @@ export default function AdminQuestionsPage() {
             .select('*')
             .order('sort_order', { ascending: true });
 
-        if (!error) setQuestions(data || []);
+        if (!error) {
+            console.log('Fetched questions count:', (data || []).length);
+            setQuestions(data || []);
+        }
         setLoading(false);
     };
 
@@ -200,6 +423,19 @@ export default function AdminQuestionsPage() {
         const { error } = await client.from('admin_users').delete().eq('email', email);
         if (error) alert('삭제 실패: ' + error.message);
         else fetchAdmins();
+    };
+
+    const handleLoadInitialData = async () => {
+        const client = getSbClient();
+        if (!client) return;
+        if (!confirm('초기 데이터를 불러오시겠습니까? 기존 데이터에 추가됩니다.')) return;
+
+        const { error } = await client
+            .from('survey_questions')
+            .upsert(INITIAL_QUESTIONS.map(q => ({ ...q, is_hidden: false })));
+
+        if (error) alert('초기 데이터 로드 실패: ' + error.message);
+        else fetchQuestions();
     };
 
     if (authLoading) {
@@ -295,13 +531,21 @@ export default function AdminQuestionsPage() {
                                 <h1 className="text-4xl font-black text-gray-900">Survey Questions</h1>
                                 <p className="text-gray-500 mt-2 font-medium">관리자 전용 설문 문항 제어 센터입니다.</p>
                             </div>
-                            <button
-                                onClick={handleAddQuestion}
-                                className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                                Add New Question
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleLoadInitialData}
+                                    className="px-6 py-4 bg-green-600 text-white rounded-2xl font-black hover:bg-green-700 active:scale-95 transition-all shadow-xl shadow-green-100 flex items-center justify-center gap-2"
+                                >
+                                    초기 데이터 로드
+                                </button>
+                                <button
+                                    onClick={handleAddQuestion}
+                                    className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                                    Add New Question
+                                </button>
+                            </div>
                         </div>
 
                         {loading ? (
