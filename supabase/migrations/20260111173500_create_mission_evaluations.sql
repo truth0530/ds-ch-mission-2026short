@@ -6,6 +6,10 @@ CREATE TABLE IF NOT EXISTS public.mission_evaluations (
     team_country TEXT,
     team_missionary TEXT,
     team_leader TEXT,
+    respondent_email TEXT, -- 응답자 이메일 (익명 또는 로그인 사용자)
+    respondent_name TEXT, -- 응답자 이름 (선택적)
+    submission_date DATE DEFAULT CURRENT_DATE, -- 제출 날짜
+    response_status TEXT DEFAULT 'completed', -- 응답 상태: 'completed', 'partial'
     answers JSONB, -- 설문 응답을 유연하게 저장 (예: {"q1": 5, "c1": "내용..."})
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

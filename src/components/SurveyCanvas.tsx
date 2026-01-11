@@ -63,6 +63,12 @@ export default function SurveyCanvas() {
             user: null as any,
             isAdmin: false,
             loading: true
+        },
+        error: null as string | null,
+        validationErrors: [] as string[],
+        respondentInfo: {
+            name: '',
+            email: ''
         }
     });
 
@@ -106,6 +112,76 @@ export default function SurveyCanvas() {
                 }
             }));
         }
+    };
+
+    // ===== VALIDATION FUNCTIONS =====
+    const validateFormData = (questions: Question[], formData: any): string[] => {
+        const errors: string[] = [];
+        questions.forEach(q => {
+            const answer = formData[q.id];
+            if (!answer || (typeof answer === 'string' && answer.trim() === '')) {
+                errors.push(q.id);
+            } else if (q.type === 'multi_select' && Array.isArray(answer) && answer.length === 0) {
+                errors.push(q.id);
+            }
+        });
+        return errors;
+    };
+
+    const validateTeamSelection = (role: string | null, selectedTeam: TeamInfo | null): boolean => {
+        // 인솔자와 팀원은 반드시 팀을 선택해야 함
+        if ((role === '인솔자' || role === '단기선교 팀원') && !selectedTeam) {
+            return false;
+        }
+        return true;
+    };
+
+    // ===== AUTO-SAVE FUNCTIONS =====
+    const getStorageKey = (role: string | null, team: TeamInfo | null) => {
+        return `survey_draft_${role}_${team?.missionary || 'general'}`;
+    };
+
+    const saveToLocalStorage = useCallback(() => {
+        const { role, selectedTeam, formData, respondentInfo } = stateRef.current;
+        if (Object.keys(formData).length > 0) {
+            const key = getStorageKey(role, selectedTeam);
+            localStorage.setItem(key, JSON.stringify({ formData, respondentInfo, savedAt: Date.now() }));
+        }
+    }, []);
+
+    const loadFromLocalStorage = (role: string | null, team: TeamInfo | null) => {
+        const key = getStorageKey(role, team);
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                const savedDate = new Date(parsed.savedAt);
+                return {
+                    formData: parsed.formData || {},
+                    respondentInfo: parsed.respondentInfo || { name: '', email: '' },
+                    savedDate
+                };
+            } catch (e) {
+                console.error('Failed to parse saved data:', e);
+            }
+        }
+        return null;
+    };
+
+    const clearLocalStorage = (role: string | null, team: TeamInfo | null) => {
+        const key = getStorageKey(role, team);
+        localStorage.removeItem(key);
+    };
+
+    // Check for duplicate submission
+    const checkDuplicateSubmission = (role: string | null, team: TeamInfo | null): boolean => {
+        const key = `survey_submitted_${role}_${team?.missionary || 'general'}`;
+        return sessionStorage.getItem(key) === 'true';
+    };
+
+    const markAsSubmitted = (role: string | null, team: TeamInfo | null) => {
+        const key = `survey_submitted_${role}_${team?.missionary || 'general'}`;
+        sessionStorage.setItem(key, 'true');
     };
 
 
@@ -196,6 +272,16 @@ export default function SurveyCanvas() {
             };
         }
     }, [isInitialized, resize]);
+
+    // Auto-save formData to localStorage
+    useEffect(() => {
+        if (isInitialized && state.view === 'team_selection' && state.selectedTeam) {
+            const timeoutId = setTimeout(() => {
+                saveToLocalStorage();
+            }, 1000); // Debounce: save 1 second after last change
+            return () => clearTimeout(timeoutId);
+        }
+    }, [state.formData, state.respondentInfo, isInitialized, state.view, state.selectedTeam, saveToLocalStorage]);
 
     const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
         const chars = text.split('');
@@ -332,7 +418,7 @@ export default function SurveyCanvas() {
     };
 
     const renderSurveyContent = (ctx: CanvasRenderingContext2D, startY: number) => {
-        const { width, role, formData, focus, cursorBlink, mouse, scroll, questions: dynQuestions } = stateRef.current;
+        const { width, role, formData, focus, cursorBlink, mouse, scroll, questions: dynQuestions, validationErrors } = stateRef.current;
         let questions: Question[] = [];
         if (role === '선교사') questions = dynQuestions.missionary;
         else if (role === '인솔자') questions = dynQuestions.leader;
@@ -340,7 +426,8 @@ export default function SurveyCanvas() {
 
         let currentY = startY + 20;
         questions.forEach((q) => {
-            ctx.fillStyle = layout.colors.label;
+            const hasError = validationErrors.includes(q.id);
+            ctx.fillStyle = hasError ? '#ef4444' : layout.colors.label;
             ctx.font = 'bold 14px sans-serif';
             ctx.textAlign = 'left';
 
@@ -396,8 +483,10 @@ export default function SurveyCanvas() {
                 currentY += options.length * 35 + 20;
             } else {
                 const isFocus = focus === q.id;
+                const hasError = validationErrors.includes(q.id);
                 const h = layout.textareaH;
-                drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, h, 8, isFocus ? '#f8fafc' : '#fff', isFocus ? layout.colors.primary : layout.colors.border);
+                const borderColor = hasError ? '#ef4444' : (isFocus ? layout.colors.primary : layout.colors.border);
+                drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, h, 8, isFocus ? '#f8fafc' : '#fff', borderColor);
                 ctx.fillStyle = formData[q.id] ? layout.colors.text : '#9ca3af';
                 ctx.font = '13px sans-serif';
                 const txt = formData[q.id] || '내용을 입력해주세요...';
@@ -426,23 +515,36 @@ export default function SurveyCanvas() {
     };
 
     const renderTeamPage = (ctx: CanvasRenderingContext2D) => {
-        const { width, height, mouse, scroll, selectedTeam, role } = stateRef.current;
+        const { width, height, mouse, scroll, selectedTeam, role, error } = stateRef.current;
         ctx.save();
         ctx.translate(0, -scroll);
+
+        // Error banner (if any)
+        if (error) {
+            const bannerH = 60;
+            drawRoundedRect(ctx, layout.padding, 20, width - layout.padding * 2, bannerH, 8, '#fef2f2', '#ef4444');
+            ctx.fillStyle = '#dc2626';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            const errorLines = wrapText(ctx, error, width - layout.padding * 2 - 30);
+            errorLines.forEach((line, i) => {
+                ctx.fillText(line, width / 2, 38 + i * 18);
+            });
+            ctx.textAlign = 'left';
+        }
+
+        const headerY = error ? 100 : 60;
 
         ctx.textAlign = 'left';
         ctx.fillStyle = layout.colors.text;
         ctx.font = 'bold 20px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = layout.colors.text;
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(role === '선교사' ? '선교사 평가' : '사역팀 선택', layout.padding, 60);
+        ctx.fillText(role === '선교사' ? '선교사 평가' : '사역팀 선택', layout.padding, headerY);
 
         // Back Button
         const backBtnW = 80;
         const backBtnH = 34;
         const backBtnX = width - layout.padding - backBtnW;
-        const backBtnY = 36;
+        const backBtnY = headerY - 24;
         const hoverBack = isInside(mouse.x, mouse.y + scroll, backBtnX, backBtnY, backBtnW, backBtnH);
         drawRoundedRect(ctx, backBtnX, backBtnY, backBtnW, backBtnH, 8, hoverBack ? '#f1f5f9' : '#fff', layout.colors.border);
         ctx.fillStyle = layout.colors.label;
@@ -451,7 +553,7 @@ export default function SurveyCanvas() {
         ctx.fillText('뒤로가기', backBtnX + backBtnW / 2, backBtnY + 21);
         ctx.textAlign = 'left';
 
-        let currentY = 100;
+        let currentY = headerY + 40;
         let lastDept = '';
         const isCollapsed = !!selectedTeam;
 
@@ -568,7 +670,17 @@ export default function SurveyCanvas() {
             roles.forEach((r, i) => {
                 const y = startY + (btnH + 20) * i;
                 if (isInside(mx, my, layout.padding, y, width - layout.padding * 2, btnH)) {
-                    setState(prev => ({ ...prev, role: r as any, view: 'team_selection', scroll: 0, formData: {}, selectedTeam: null }));
+                    const newRole = r as any;
+                    setState(prev => ({
+                        ...prev,
+                        role: newRole,
+                        view: 'team_selection',
+                        scroll: 0,
+                        formData: {},
+                        selectedTeam: null,
+                        validationErrors: [],
+                        error: null
+                    }));
                 }
             });
             return;
@@ -600,9 +712,28 @@ export default function SurveyCanvas() {
 
                 if (isInside(mx, realY, layout.padding, currentY, width - layout.padding * 2, btnH)) {
                     if (isSelected) {
-                        setState(prev => ({ ...prev, selectedTeam: null, scroll: 0 }));
+                        setState(prev => ({ ...prev, selectedTeam: null, scroll: 0, validationErrors: [] }));
                     } else {
-                        setState(prev => ({ ...prev, selectedTeam: team, scroll: 0 }));
+                        // Check for saved draft when selecting a team
+                        const saved = loadFromLocalStorage(role, team);
+                        if (saved && Object.keys(saved.formData).length > 0) {
+                            // Confirm restoration
+                            const confirmMsg = `임시 저장된 답변이 있습니다. 불러오시겠습니까?`;
+                            if (window.confirm(confirmMsg)) {
+                                setState(prev => ({
+                                    ...prev,
+                                    selectedTeam: team,
+                                    formData: saved.formData,
+                                    respondentInfo: saved.respondentInfo,
+                                    scroll: 0,
+                                    validationErrors: []
+                                }));
+                            } else {
+                                setState(prev => ({ ...prev, selectedTeam: team, scroll: 0, validationErrors: [] }));
+                            }
+                        } else {
+                            setState(prev => ({ ...prev, selectedTeam: team, scroll: 0, validationErrors: [] }));
+                        }
                     }
                     return;
                 }
@@ -684,24 +815,90 @@ export default function SurveyCanvas() {
     };
 
     const submitData = async () => {
-        const { formData, role, selectedTeam } = stateRef.current;
-        setState(prev => ({ ...prev, view: 'submitting' }));
+        const { formData, role, selectedTeam, respondentInfo, auth, questions: dynQuestions } = stateRef.current;
 
+        // 1. Validation: Check team selection
+        if (!validateTeamSelection(role, selectedTeam)) {
+            setState(prev => ({
+                ...prev,
+                error: '팀을 선택해주세요. 팀 선택 버튼을 클릭하세요.',
+                scroll: 0
+            }));
+            return;
+        }
+
+        // 2. Validation: Check all required fields
+        let questions: Question[] = [];
+        if (role === '선교사') questions = dynQuestions.missionary;
+        else if (role === '인솔자') questions = dynQuestions.leader;
+        else if (role === '단기선교 팀원') questions = dynQuestions.team_member;
+
+        const missingAnswers = validateFormData(questions, formData);
+        if (missingAnswers.length > 0) {
+            setState(prev => ({
+                ...prev,
+                error: `${missingAnswers.length}개의 필수 질문에 답변해주세요.`,
+                validationErrors: missingAnswers,
+                scroll: 0
+            }));
+            setTimeout(() => {
+                setState(prev => ({ ...prev, error: null }));
+            }, 5000);
+            return;
+        }
+
+        // 3. Check duplicate submission
+        if (checkDuplicateSubmission(role, selectedTeam)) {
+            setState(prev => ({
+                ...prev,
+                error: '이미 이 팀에 대한 설문을 제출하셨습니다.',
+            }));
+            setTimeout(() => {
+                setState(prev => ({ ...prev, error: null }));
+            }, 3000);
+            return;
+        }
+
+        setState(prev => ({ ...prev, view: 'submitting', error: null, validationErrors: [] }));
+
+        // 4. Prepare payload with enhanced data
         const payload = {
             role,
             team_dept: selectedTeam?.dept,
             team_country: selectedTeam?.country,
             team_missionary: selectedTeam?.missionary,
             team_leader: selectedTeam?.leader,
-            answers: formData // 모든 응답을 JSONB 컬럼 하나에 저장
+            respondent_email: auth.user?.email || respondentInfo.email || null,
+            respondent_name: respondentInfo.name || null,
+            submission_date: new Date().toISOString().split('T')[0],
+            response_status: 'completed',
+            answers: formData
         };
 
+        // 5. Submit to database
         const { error } = await sbClient.from('mission_evaluations').insert([payload]);
+
         if (error) {
-            alert('제출 중 오류가 발생했습니다: ' + error.message);
-            setState(prev => ({ ...prev, view: 'team_selection' }));
+            console.error('Submission error:', error);
+            setState(prev => ({
+                ...prev,
+                view: 'team_selection',
+                error: '제출 중 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.'
+            }));
+            setTimeout(() => {
+                setState(prev => ({ ...prev, error: null }));
+            }, 5000);
         } else {
-            setState(prev => ({ ...prev, view: 'success' }));
+            // 6. Success: Clear storage and mark as submitted
+            clearLocalStorage(role, selectedTeam);
+            markAsSubmitted(role, selectedTeam);
+            setState(prev => ({
+                ...prev,
+                view: 'success',
+                formData: {},
+                respondentInfo: { name: '', email: '' },
+                validationErrors: []
+            }));
         }
     };
 
