@@ -42,7 +42,6 @@ export default function SurveyCanvas() {
     const hiddenInputRef = useRef<HTMLInputElement>(null);
     const [isInitialized, setIsInitialized] = useState(false);
     const [sbClient, setSbClient] = useState<any>(null);
-    const [sbKey, setSbKey] = useState('');
 
     const [state, setState] = useState({
         view: 'landing',
@@ -109,20 +108,6 @@ export default function SurveyCanvas() {
         }
     };
 
-    const initApp = async () => {
-        if (!sbKey) {
-            alert('인증을 위해 Anon Key를 입력해주세요.');
-            return;
-        }
-        try {
-            const client = createSupabaseClient(ENV.SUPABASE_URL, sbKey);
-            setSbClient(client);
-            await loadQuestions(client);
-            setIsInitialized(true);
-        } catch (e: any) {
-            alert('인증 실패: ' + e.message);
-        }
-    };
 
     useEffect(() => {
         const url = ENV.SUPABASE_URL;
@@ -690,12 +675,8 @@ export default function SurveyCanvas() {
 
     if (!isInitialized) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-[#f4f7f6] p-5">
-                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full">
-                    <h2 className="text-2xl font-bold mb-4">사역 평가 시스템 접속</h2>
-                    <input type="password" placeholder="Anon Key" value={sbKey} onChange={(e) => setSbKey(e.target.value)} className="w-full p-2.5 border rounded mb-4 focus:ring-1 focus:ring-blue-500 outline-none" />
-                    <button onClick={initApp} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition">시작하기</button>
-                </div>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#f4f7f6]">
+                <div className="animate-pulse text-xl font-bold text-gray-500">시스템 로딩중...</div>
             </div>
         );
     }

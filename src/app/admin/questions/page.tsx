@@ -5,7 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const sbClient = createClient(SB_URL, SB_KEY);
+
+// Lazy client initialization to prevent build-time crashes
+let sbClientInstance: any = null;
+const getSbClient = () => {
+    if (!sbClientInstance && SB_URL && SB_KEY) {
+        sbClientInstance = createClient(SB_URL, SB_KEY);
+    }
+    return sbClientInstance;
+};
 
 interface Question {
     id: string;
@@ -40,26 +48,32 @@ export default function AdminQuestionsPage() {
     const [newAdminEmail, setNewAdminEmail] = useState('');
 
     useEffect(() => {
-        checkUser();
-        const { data: authListener } = sbClient.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) checkAuthorization(session.user);
+        const client = getSbClient();
+        if (!client) {
+            setAuthLoading(false);
+            return;
+        }
+
+        checkUser(client);
+        const { data: authListener } = client.auth.onAuthStateChange((_event: any, session: any) => {
+            if (session?.user) checkAuthorization(client, session.user);
             else { setUser(null); setIsAuthorized(false); }
         });
         return () => { authListener.subscription.unsubscribe(); };
     }, []);
 
-    const checkUser = async () => {
+    const checkUser = async (client: any) => {
         setAuthLoading(true);
-        const { data: { session } } = await sbClient.auth.getSession();
+        const { data: { session } } = await client.auth.getSession();
         if (session?.user) {
-            await checkAuthorization(session.user);
+            await checkAuthorization(client, session.user);
         } else {
             setAuthLoading(false);
         }
     };
 
-    const checkAuthorization = async (currentUser: any) => {
-        const { data, error } = await sbClient
+    const checkAuthorization = async (client: any, currentUser: any) => {
+        const { data, error } = await client
             .from('admin_users')
             .select('*')
             .eq('email', currentUser.email)
@@ -79,7 +93,9 @@ export default function AdminQuestionsPage() {
     };
 
     const handleLogin = async () => {
-        const { error } = await sbClient.auth.signInWithOAuth({
+        const client = getSbClient();
+        if (!client) return;
+        const { error } = await client.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/admin/questions`
@@ -89,13 +105,17 @@ export default function AdminQuestionsPage() {
     };
 
     const handleLogout = async () => {
-        await sbClient.auth.signOut();
+        const client = getSbClient();
+        if (!client) return;
+        await client.auth.signOut();
         window.location.reload();
     };
 
     const fetchQuestions = async () => {
+        const client = getSbClient();
+        if (!client) return;
         setLoading(true);
-        const { data, error } = await sbClient
+        const { data, error } = await client
             .from('survey_questions')
             .select('*')
             .order('sort_order', { ascending: true });
@@ -105,7 +125,9 @@ export default function AdminQuestionsPage() {
     };
 
     const fetchAdmins = async () => {
-        const { data, error } = await sbClient
+        const client = getSbClient();
+        if (!client) return;
+        const { data, error } = await client
             .from('admin_users')
             .select('*')
             .order('created_at', { ascending: false });
@@ -113,7 +135,9 @@ export default function AdminQuestionsPage() {
     };
 
     const handleSaveQuestion = async (id: string) => {
-        const { error } = await sbClient
+        const client = getSbClient();
+        if (!client) return;
+        const { error } = await client
             .from('survey_questions')
             .update(editForm)
             .eq('id', id);
@@ -123,7 +147,9 @@ export default function AdminQuestionsPage() {
     };
 
     const handleToggleHidden = async (q: Question) => {
-        const { error } = await sbClient
+        const client = getSbClient();
+        if (!client) return;
+        const { error } = await client
             .from('survey_questions')
             .update({ is_hidden: !q.is_hidden })
             .eq('id', q.id);
@@ -131,8 +157,10 @@ export default function AdminQuestionsPage() {
     };
 
     const handleAddQuestion = async () => {
+        const client = getSbClient();
+        if (!client) return;
         const newId = `new_${Date.now()}`;
-        const { error } = await sbClient
+        const { error } = await client
             .from('survey_questions')
             .insert([{
                 id: newId,
@@ -146,14 +174,17 @@ export default function AdminQuestionsPage() {
     };
 
     const handleDeleteQuestion = async (id: string) => {
+        const client = getSbClient();
+        if (!client) return;
         if (!confirm('문항을 삭제하시겠습니까?')) return;
-        const { error } = await sbClient.from('survey_questions').delete().eq('id', id);
+        const { error } = await client.from('survey_questions').delete().eq('id', id);
         if (!error) fetchQuestions();
     };
 
     const handleAddAdmin = async () => {
-        if (!newAdminEmail) return;
-        const { error } = await sbClient
+        const client = getSbClient();
+        if (!client || !newAdminEmail) return;
+        const { error } = await client
             .from('admin_users')
             .insert([{ email: newAdminEmail, added_by: user.email }]);
 
@@ -162,9 +193,11 @@ export default function AdminQuestionsPage() {
     };
 
     const handleDeleteAdmin = async (email: string) => {
+        const client = getSbClient();
+        if (!client) return;
         if (email === user.email) { alert('자기 자신은 삭제할 수 없습니다.'); return; }
         if (!confirm(`${email} 관리자를 권한 해제하시겠습니까?`)) return;
-        const { error } = await sbClient.from('admin_users').delete().eq('email', email);
+        const { error } = await client.from('admin_users').delete().eq('email', email);
         if (error) alert('삭제 실패: ' + error.message);
         else fetchAdmins();
     };

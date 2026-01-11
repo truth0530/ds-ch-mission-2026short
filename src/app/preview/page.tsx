@@ -6,7 +6,15 @@ import { createClient } from '@supabase/supabase-js';
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const sbClient = createClient(SB_URL, SB_KEY);
+
+// Lazy client initialization to prevent build-time crashes
+let sbClientInstance: any = null;
+const getSbClient = () => {
+    if (!sbClientInstance && SB_URL && SB_KEY) {
+        sbClientInstance = createClient(SB_URL, SB_KEY);
+    }
+    return sbClientInstance;
+};
 
 const QuestionPreview = ({ question }: { question: Question }) => {
     return (
@@ -59,7 +67,9 @@ export default function PreviewPage() {
     useEffect(() => {
         const fetchQuestions = async () => {
             try {
-                const { data, error } = await sbClient
+                const client = getSbClient();
+                if (!client) throw new Error('Supabase client not initialized');
+                const { data, error } = await client
                     .from('survey_questions')
                     .select('*')
                     .eq('is_hidden', false)
@@ -67,7 +77,7 @@ export default function PreviewPage() {
 
                 if (!error && data && data.length > 0) {
                     const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
-                    data.forEach(q => {
+                    data.forEach((q: any) => {
                         const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
                         if (q.role === 'common') qMap.common.push(mappedQ);
                         else if (qMap[q.role]) qMap[q.role].push(mappedQ);
