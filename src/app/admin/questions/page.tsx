@@ -492,6 +492,12 @@ export default function AdminQuestionsPage() {
                             <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">{activeTab} mode</span>
                         </div>
                         <div className="hidden md:flex items-center gap-1 bg-gray-50 p-1 rounded-xl">
+                            <a
+                                href="/admin/dashboard"
+                                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-gray-600"
+                            >
+                                대시보드
+                            </a>
                             <button
                                 onClick={() => setActiveTab('questions')}
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'questions' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
