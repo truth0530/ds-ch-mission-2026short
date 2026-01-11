@@ -56,10 +56,23 @@ export default function AdminDashboard() {
     useEffect(() => {
         const client = getSbClient();
         if (!client) {
+            console.error('Supabase client not initialized. Check environment variables.');
             setAuthLoading(false);
             return;
         }
 
+        // Check initial session
+        client.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
+            if (session?.user) {
+                checkAuthorization(client, session.user);
+            } else {
+                setUser(null);
+                setIsAuthorized(false);
+                setAuthLoading(false);
+            }
+        });
+
+        // Listen for auth changes
         const { data: { subscription } } = client.auth.onAuthStateChange((_event: any, session: any) => {
             if (session?.user) {
                 checkAuthorization(client, session.user);
@@ -69,6 +82,7 @@ export default function AdminDashboard() {
                 setAuthLoading(false);
             }
         });
+
         return () => subscription.unsubscribe();
     }, []);
 
