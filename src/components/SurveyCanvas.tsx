@@ -693,7 +693,7 @@ export default function SurveyCanvas() {
             team_country: selectedTeam?.country,
             team_missionary: selectedTeam?.missionary,
             team_leader: selectedTeam?.leader,
-            ...formData
+            answers: formData // 모든 응답을 JSONB 컬럼 하나에 저장
         };
 
         const { error } = await sbClient.from('mission_evaluations').insert([payload]);
