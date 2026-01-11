@@ -433,7 +433,23 @@ export default function SurveyCanvas() {
         ctx.textAlign = 'left';
         ctx.fillStyle = layout.colors.text;
         ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = layout.colors.text;
+        ctx.font = 'bold 20px sans-serif';
         ctx.fillText(role === '선교사' ? '선교사 평가' : '사역팀 선택', layout.padding, 60);
+
+        // Back Button
+        const backBtnW = 80;
+        const backBtnH = 34;
+        const backBtnX = width - layout.padding - backBtnW;
+        const backBtnY = 36;
+        const hoverBack = isInside(mouse.x, mouse.y + scroll, backBtnX, backBtnY, backBtnW, backBtnH);
+        drawRoundedRect(ctx, backBtnX, backBtnY, backBtnW, backBtnH, 8, hoverBack ? '#f1f5f9' : '#fff', layout.colors.border);
+        ctx.fillStyle = layout.colors.label;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('뒤로가기', backBtnX + backBtnW / 2, backBtnY + 21);
+        ctx.textAlign = 'left';
 
         let currentY = 100;
         let lastDept = '';
@@ -560,6 +576,17 @@ export default function SurveyCanvas() {
 
         if (view === 'team_selection') {
             const realY = my + scroll;
+
+            // Back Button Click
+            const backBtnW = 80;
+            const backBtnH = 34;
+            const backBtnX = width - layout.padding - backBtnW;
+            const backBtnY = 36;
+            if (isInside(mx, realY, backBtnX, backBtnY, backBtnW, backBtnH)) {
+                setState(prev => ({ ...prev, view: 'role_selection', role: null, selectedTeam: null, formData: {}, scroll: 0 }));
+                return;
+            }
+
             let currentY = 100;
             let lastDept = '';
             const isCollapsed = !!selectedTeam;
