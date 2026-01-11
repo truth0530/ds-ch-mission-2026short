@@ -216,80 +216,18 @@ export default function SurveyCanvas() {
         });
     };
 
-    const renderTeamSelection = (ctx: CanvasRenderingContext2D) => {
-        const { width, height, mouse, scroll } = stateRef.current;
+    const renderSurveyContent = (ctx: CanvasRenderingContext2D, startY: number) => {
+        const { width, role, formData, focus, cursorBlink, mouse, scroll } = stateRef.current;
+        let questions: Question[] = [];
+        if (role === '선교사') questions = MISSIONARY_QUESTIONS;
+        else if (role === '인솔자') questions = LEADER_QUESTIONS;
+        else if (role === '단기선교 팀원') questions = TEAM_QUESTIONS;
 
-        ctx.save();
-        ctx.translate(0, -scroll);
-
-        ctx.textAlign = 'left';
-        ctx.fillStyle = layout.colors.text;
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('사역팀 선택', layout.padding, 60);
-
-        let currentY = 100;
-        let lastDept = '';
-
-        MISSION_TEAMS.forEach((team) => {
-            if (team.dept !== lastDept) {
-                currentY += 20;
-                ctx.fillStyle = layout.colors.primary;
-                ctx.font = 'bold 14px sans-serif';
-                ctx.fillText(`[${team.dept}]`, layout.padding, currentY);
-                currentY += 20;
-                lastDept = team.dept;
-            }
-
-            const btnH = 65;
-            const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, currentY, width - layout.padding * 2, btnH);
-            drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, btnH, 10, hover ? '#f8fafc' : '#fff', layout.colors.border);
-
-            ctx.fillStyle = layout.colors.text;
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${team.missionary} (${team.country})`, layout.padding + 15, currentY + 25);
-
-            ctx.fillStyle = layout.colors.label;
-            ctx.font = '11px sans-serif';
-            ctx.fillText(`인솔: ${team.leader} | 기간: ${team.period} | 인원: ${team.members}`, layout.padding + 15, currentY + 45);
-
-            currentY += btnH + 10;
-        });
-
-        ctx.restore();
-
-        const trackH = height - 40;
-        const scrollMax = Math.max(1, currentY + 50 - height);
-        if (scrollMax > 1) {
-            const thumbH = Math.max(30, (height / (currentY + 50)) * trackH);
-            const thumbY = 20 + (scroll / scrollMax) * (trackH - thumbH);
-            ctx.fillStyle = 'rgba(0,0,0,0.1)';
-            ctx.fillRect(width - 8, 20, 4, trackH);
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.fillRect(width - 8, thumbY, 4, thumbH);
-        }
-    };
-
-    const renderSurveyPage = (ctx: CanvasRenderingContext2D, title: string, questions: Question[]) => {
-        const { width, height, formData, focus, cursorBlink, mouse, scroll, selectedTeam } = stateRef.current;
-
-        ctx.save();
-        ctx.translate(0, -scroll);
-
-        ctx.textAlign = 'left';
-        ctx.fillStyle = layout.colors.text;
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(title, layout.padding, 60);
-
-        if (selectedTeam) {
-            ctx.fillStyle = layout.colors.label;
-            ctx.font = '12px sans-serif';
-            ctx.fillText(`사역지: ${selectedTeam.country} | 선교사: ${selectedTeam.missionary}`, layout.padding, 85);
-        }
-
-        let currentY = 120;
+        let currentY = startY + 20;
         questions.forEach((q) => {
             ctx.fillStyle = layout.colors.label;
             ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'left';
 
             const lines = wrapText(ctx, q.text, width - layout.padding * 2);
             lines.forEach((line, li) => {
@@ -325,7 +263,6 @@ export default function SurveyCanvas() {
                 options.forEach((opt, oi) => {
                     const isSelected = (formData[q.id] || []).includes(opt);
                     const optY = currentY + oi * 35;
-
                     drawRoundedRect(ctx, layout.padding, optY, 20, 20, 4, isSelected ? layout.colors.primary : '#fff', layout.colors.border);
                     if (isSelected) {
                         ctx.strokeStyle = '#fff';
@@ -336,7 +273,6 @@ export default function SurveyCanvas() {
                         ctx.lineTo(layout.padding + 15, optY + 6);
                         ctx.stroke();
                     }
-
                     ctx.fillStyle = layout.colors.text;
                     ctx.font = '13px sans-serif';
                     ctx.textAlign = 'left';
@@ -347,7 +283,6 @@ export default function SurveyCanvas() {
                 const isFocus = focus === q.id;
                 const h = layout.textareaH;
                 drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, h, 8, isFocus ? '#f8fafc' : '#fff', isFocus ? layout.colors.primary : layout.colors.border);
-
                 ctx.fillStyle = formData[q.id] ? layout.colors.text : '#9ca3af';
                 ctx.font = '13px sans-serif';
                 const txt = formData[q.id] || '내용을 입력해주세요...';
@@ -355,7 +290,6 @@ export default function SurveyCanvas() {
                 txtLines.forEach((tl, tli) => {
                     if (tli < 4) ctx.fillText(tl, layout.padding + 15, currentY + 25 + tli * 18);
                 });
-
                 if (isFocus && Math.floor(cursorBlink / 30) % 2 === 0) {
                     const lastLine = txtLines[txtLines.length - 1] || '';
                     const tw = ctx.measureText(lastLine).width;
@@ -373,13 +307,67 @@ export default function SurveyCanvas() {
         ctx.font = 'bold 17px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('평가 제출하기', width / 2, btnY + 34);
+        return btnY + 100;
+    };
+
+    const renderTeamPage = (ctx: CanvasRenderingContext2D) => {
+        const { width, height, mouse, scroll, selectedTeam, role } = stateRef.current;
+        ctx.save();
+        ctx.translate(0, -scroll);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = layout.colors.text;
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(role === '선교사' ? '선교사 평가' : '사역팀 선택', layout.padding, 60);
+
+        let currentY = 100;
+        let lastDept = '';
+        const isCollapsed = !!selectedTeam;
+
+        MISSION_TEAMS.forEach((team) => {
+            const isSelected = selectedTeam?.missionary === team.missionary;
+            if (isCollapsed && !isSelected) return;
+
+            if (!isCollapsed && team.dept !== lastDept) {
+                currentY += 20;
+                ctx.fillStyle = layout.colors.primary;
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText(`[${team.dept}]`, layout.padding, currentY);
+                currentY += 20;
+                lastDept = team.dept;
+            }
+
+            const btnH = 65;
+            const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, currentY, width - layout.padding * 2, btnH);
+            drawRoundedRect(ctx, layout.padding, currentY, width - layout.padding * 2, btnH, 10, isSelected ? '#eff6ff' : (hover ? '#f8fafc' : '#fff'), isSelected ? layout.colors.primary : layout.colors.border);
+
+            ctx.fillStyle = layout.colors.text;
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText(`${team.missionary} (${team.country})`, layout.padding + 15, currentY + 25);
+            ctx.fillStyle = layout.colors.label;
+            ctx.font = '11px sans-serif';
+            ctx.fillText(`인솔: ${team.leader} | 기간: ${team.period} | 인원: ${team.members}`, layout.padding + 15, currentY + 45);
+
+            if (isSelected) {
+                ctx.fillStyle = layout.colors.primary;
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(isCollapsed ? '변경하려면 클릭' : '선택됨', width - layout.padding - 15, currentY + 25);
+                ctx.textAlign = 'left';
+            }
+
+            currentY += btnH + 10;
+        });
+
+        if (isCollapsed) {
+            currentY = renderSurveyContent(ctx, currentY);
+        }
 
         ctx.restore();
-
-        const trackH = height - 40;
-        const scrollMax = Math.max(1, currentY + 100 - height);
+        const scrollMax = Math.max(1, currentY - height);
         if (scrollMax > 1) {
-            const thumbH = Math.max(30, (height / (currentY + 100)) * trackH);
+            const trackH = height - 40;
+            const thumbH = Math.max(30, (height / currentY) * trackH);
             const thumbY = 20 + (scroll / scrollMax) * (trackH - thumbH);
             ctx.fillStyle = 'rgba(0,0,0,0.1)';
             ctx.fillRect(width - 8, 20, 4, trackH);
@@ -397,10 +385,7 @@ export default function SurveyCanvas() {
             ctx.clearRect(0, 0, stateRef.current.width, stateRef.current.height);
             switch (stateRef.current.view) {
                 case 'role_selection': renderRoleSelection(ctx); break;
-                case 'team_selection': renderTeamSelection(ctx); break;
-                case 'missionary_survey': renderSurveyPage(ctx, '선교사 평가설문', MISSIONARY_QUESTIONS); break;
-                case 'leader_survey': renderSurveyPage(ctx, '인솔자 평가설문', LEADER_QUESTIONS); break;
-                case 'team_member_survey': renderSurveyPage(ctx, '팀원 평가설문', TEAM_QUESTIONS); break;
+                case 'team_selection': renderTeamPage(ctx); break;
                 case 'submitting': {
                     ctx.fillStyle = layout.colors.text;
                     ctx.font = 'bold 20px sans-serif';
@@ -418,19 +403,19 @@ export default function SurveyCanvas() {
             }
         };
         render();
-    }, [state.cursorBlink, state.view, state.formData, state.focus, state.mouse, state.scroll, isInitialized]);
+    }, [state.cursorBlink, state.view, state.formData, state.focus, state.mouse, state.scroll, isInitialized, state.selectedTeam]);
 
     const handleInteraction = (mx: number, my: number) => {
-        const { view, width, height, formData, scroll } = stateRef.current;
+        const { view, width, height, formData, scroll, selectedTeam, role } = stateRef.current;
 
         if (view === 'role_selection') {
             const roles = ['선교사', '인솔자', '단기선교 팀원'];
             const startY = 180;
             const btnH = 60;
-            roles.forEach((role, i) => {
+            roles.forEach((r, i) => {
                 const y = startY + (btnH + 20) * i;
                 if (isInside(mx, my, layout.padding, y, width - layout.padding * 2, btnH)) {
-                    setState(prev => ({ ...prev, role: role as any, view: 'team_selection', scroll: 0, formData: {} }));
+                    setState(prev => ({ ...prev, role: r as any, view: 'team_selection', scroll: 0, formData: {}, selectedTeam: null }));
                 }
             });
             return;
@@ -440,83 +425,84 @@ export default function SurveyCanvas() {
             const realY = my + scroll;
             let currentY = 100;
             let lastDept = '';
+            const isCollapsed = !!selectedTeam;
+
             for (let team of MISSION_TEAMS) {
-                if (team.dept !== lastDept) { currentY += 40; lastDept = team.dept; }
+                const isSelected = selectedTeam?.missionary === team.missionary;
+                if (isCollapsed && !isSelected) continue;
+
+                if (!isCollapsed && team.dept !== lastDept) { currentY += 40; lastDept = team.dept; }
                 const btnH = 65;
+
                 if (isInside(mx, realY, layout.padding, currentY, width - layout.padding * 2, btnH)) {
-                    const { role } = stateRef.current;
-                    setState(prev => ({
-                        ...prev,
-                        selectedTeam: team,
-                        view: role === '선교사' ? 'missionary_survey' : (role === '인솔자' ? 'leader_survey' : 'team_member_survey'),
-                        scroll: 0
-                    }));
+                    if (isSelected) {
+                        setState(prev => ({ ...prev, selectedTeam: null, scroll: 0 }));
+                    } else {
+                        setState(prev => ({ ...prev, selectedTeam: team, scroll: 0 }));
+                    }
                     return;
                 }
                 currentY += btnH + 10;
             }
-            return;
-        }
 
-        if (view.endsWith('_survey')) {
-            const realY = my + scroll;
-            let currentY = 120;
+            if (isCollapsed) {
+                let questions: Question[] = [];
+                if (role === '선교사') questions = MISSIONARY_QUESTIONS;
+                else if (role === '인솔자') questions = LEADER_QUESTIONS;
+                else if (role === '단기선교 팀원') questions = TEAM_QUESTIONS;
 
-            const ctx = canvasRef.current?.getContext('2d');
-            if (!ctx) return;
+                currentY += 20;
+                for (let q of questions) {
+                    const ctx = canvasRef.current?.getContext('2d');
+                    if (!ctx) return;
+                    const lineCount = wrapText(ctx, q.text, width - layout.padding * 2).length;
+                    currentY += lineCount * 20 + 10;
 
-            let activeQuestions: Question[] = [];
-            if (view === 'missionary_survey') activeQuestions = MISSIONARY_QUESTIONS;
-            else if (view === 'leader_survey') activeQuestions = LEADER_QUESTIONS;
-            else if (view === 'team_member_survey') activeQuestions = TEAM_QUESTIONS;
-
-            for (let q of activeQuestions) {
-                const lineCount = wrapText(ctx, q.text, width - layout.padding * 2).length;
-                currentY += lineCount * 20 + 10;
-
-                if (q.type === 'scale') {
-                    const spacing = (width - layout.padding * 2) / 6;
-                    for (let j = 0; j < 7; j++) {
-                        const rx = layout.padding + (spacing * j);
-                        if (Math.hypot(mx - rx, realY - (currentY + 15)) < 20) {
-                            setState(prev => ({ ...prev, formData: { ...prev.formData, [q.id]: j + 1 } }));
+                    if (q.type === 'scale') {
+                        const spacing = (width - layout.padding * 2) / 6;
+                        for (let j = 0; j < 7; j++) {
+                            const rx = layout.padding + (spacing * j);
+                            if (Math.hypot(mx - rx, realY - (currentY + 15)) < 20) {
+                                setState(prev => ({ ...prev, formData: { ...prev.formData, [q.id]: j + 1 } }));
+                                return;
+                            }
+                        }
+                        currentY += 60;
+                    } else if (q.type === 'multi_select') {
+                        const options = q.options || [];
+                        options.forEach((opt, oi) => {
+                            const optY = currentY + oi * 35;
+                            if (isInside(mx, realY, layout.padding, optY, width - layout.padding * 2, 30)) {
+                                const currentVals = formData[q.id] || [];
+                                const nextVals = currentVals.includes(opt)
+                                    ? currentVals.filter((v: string) => v !== opt)
+                                    : [...currentVals, opt];
+                                setState(prev => ({ ...prev, formData: { ...prev.formData, [q.id]: nextVals } }));
+                            }
+                        });
+                        currentY += options.length * 35 + 20;
+                    } else {
+                        if (isInside(mx, realY, layout.padding, currentY, width - layout.padding * 2, layout.textareaH)) {
+                            setState(prev => ({ ...prev, focus: q.id }));
+                            if (hiddenInputRef.current) {
+                                hiddenInputRef.current.value = formData[q.id] || '';
+                                hiddenInputRef.current.focus();
+                            }
                             return;
                         }
+                        currentY += layout.textareaH + 30;
                     }
-                    currentY += 60;
-                } else if (q.type === 'multi_select') {
-                    const options = q.options || [];
-                    options.forEach((opt, oi) => {
-                        const optY = currentY + oi * 35;
-                        if (isInside(mx, realY, layout.padding, optY, width - layout.padding * 2, 30)) {
-                            const currentVals = formData[q.id] || [];
-                            const nextVals = currentVals.includes(opt)
-                                ? currentVals.filter((v: string) => v !== opt)
-                                : [...currentVals, opt];
-                            setState(prev => ({ ...prev, formData: { ...prev.formData, [q.id]: nextVals } }));
-                        }
-                    });
-                    currentY += options.length * 35 + 20;
+                }
+
+                const lastBtnY = currentY + 20;
+                if (isInside(mx, realY, layout.padding, lastBtnY, width - layout.padding * 2, 55)) {
+                    submitData();
                 } else {
-                    if (isInside(mx, realY, layout.padding, currentY, width - layout.padding * 2, layout.textareaH)) {
-                        setState(prev => ({ ...prev, focus: q.id }));
-                        if (hiddenInputRef.current) {
-                            hiddenInputRef.current.value = formData[q.id] || '';
-                            hiddenInputRef.current.focus();
-                        }
-                        return;
-                    }
-                    currentY += layout.textareaH + 30;
+                    setState(prev => ({ ...prev, focus: null }));
+                    hiddenInputRef.current?.blur();
                 }
             }
-
-            const lastBtnY = currentY + 20;
-            if (isInside(mx, realY, layout.padding, lastBtnY, width - layout.padding * 2, 55)) {
-                submitData();
-            } else {
-                setState(prev => ({ ...prev, focus: null }));
-                hiddenInputRef.current?.blur();
-            }
+            return;
         }
 
         if (view === 'success') {
@@ -543,7 +529,7 @@ export default function SurveyCanvas() {
         const { error } = await sbClient.from('mission_evaluations').insert([payload]);
         if (error) {
             alert('제출 중 오류가 발생했습니다: ' + error.message);
-            setState(prev => ({ ...prev, view: role === '선교사' ? 'missionary_survey' : (role === '인솔자' ? 'leader_survey' : 'team_member_survey') }));
+            setState(prev => ({ ...prev, view: 'team_selection' }));
         } else {
             setState(prev => ({ ...prev, view: 'success' }));
         }
