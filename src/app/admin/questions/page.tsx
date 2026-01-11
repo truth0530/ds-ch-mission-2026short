@@ -313,7 +313,11 @@ export default function AdminQuestionsPage() {
         const { error } = await client.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/admin/questions`
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'select_account'
+                },
+                redirectTo: window.location.origin + '/admin/questions'
             }
         });
         if (error) alert('로그인 중 오류: ' + error.message);
