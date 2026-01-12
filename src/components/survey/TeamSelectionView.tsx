@@ -18,6 +18,36 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
         t.dept.includes(searchTerm)
     );
 
+    const sortedTeams = [...filteredTeams].sort((a, b) => {
+        // 1. Dept grouping (Korean sort)
+        if (a.dept !== b.dept) {
+            return a.dept.localeCompare(b.dept, 'ko');
+        }
+
+        // 2. Date sort (Ascending)
+        const getStartScore = (period: string) => {
+            try {
+                // "1/31-8" -> "1/31"
+                const start = period.split('-')[0].trim();
+                const [m, d] = start.split('/').map(Number);
+                return (m * 100) + d;
+            } catch {
+                return 9999;
+            }
+        };
+
+        return getStartScore(a.period) - getStartScore(b.period);
+    });
+
+    const getBadgeColor = (dept: string) => {
+        if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
+        if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
+        if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        if (dept.includes('오픈')) return 'bg-amber-100 text-amber-700 border-amber-200';
+        if (dept.includes('글로벌')) return 'bg-violet-100 text-violet-700 border-violet-200';
+        return 'bg-slate-100 text-slate-600 border-slate-200';
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -49,31 +79,45 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
 
             <div className="flex-1 p-6 max-w-md mx-auto w-full overflow-y-auto">
                 <div className="space-y-3">
-                    {filteredTeams.length === 0 ? (
+                    {sortedTeams.length === 0 ? (
                         <div className="text-center py-10 text-slate-400">
                             검색 결과가 없습니다.
                         </div>
                     ) : (
-                        filteredTeams.map((team, idx) => (
+                        sortedTeams.map((team, idx) => (
                             <button
                                 key={`${team.missionary}-${idx}`}
                                 onClick={() => onSelect(team)}
                                 className="w-full p-5 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-500 hover:shadow-md transition-all text-left group"
                             >
-                                <div className="flex justify-between items-start mb-1">
-                                    <h3 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                                        {team.missionary}
-                                    </h3>
-                                    <span className="text-xs font-medium px-2 py-1 bg-slate-100 text-slate-500 rounded-full group-hover:bg-indigo-50 group-hover:text-indigo-600">
-                                        {team.country}
-                                    </span>
-                                </div>
-                                <div className="text-sm text-slate-500 mb-2">
-                                    {team.dept} · 인솔 {team.leader}
-                                </div>
-                                <div className="text-xs text-slate-400 flex items-center gap-2">
-                                    <span>🗓 {team.period}</span>
-                                    <span>👥 {team.members}</span>
+                                <div className="flex items-center gap-4">
+                                    {/* Left: Country Circle */}
+                                    <div className="flex-shrink-0 w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 group-hover:bg-indigo-100 group-hover:border-indigo-200 transition-colors">
+                                        <span className="text-sm font-bold text-indigo-700 text-center leading-tight break-keep px-1">
+                                            {team.country}
+                                        </span>
+                                    </div>
+
+                                    {/* Right: Info */}
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                                                    인솔 {team.leader}
+                                                </h3>
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded border text-[10px] uppercase tracking-wider ${getBadgeColor(team.dept)}`}>
+                                                    {team.dept}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-slate-500 mb-2 font-medium">
+                                            {team.missionary}
+                                        </div>
+                                        <div className="text-xs text-slate-400 flex items-center gap-2">
+                                            <span>🗓 {team.period}</span>
+                                            <span>👥 {team.members}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </button>
                         ))

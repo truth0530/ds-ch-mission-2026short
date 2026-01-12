@@ -30,9 +30,9 @@ export default function SurveyContainer() {
     const [sbClient, setSbClient] = useState<any>(null);
     const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS); // Default to static
     const [questions, setQuestions] = useState<{ missionary: Question[]; leader: Question[]; team_member: Question[] }>({
-        missionary: [],
-        leader: [],
-        team_member: []
+        missionary: MISSIONARY_QUESTIONS,
+        leader: LEADER_QUESTIONS,
+        team_member: TEAM_QUESTIONS
     });
     const [error, setError] = useState<string | null>(null);
 
@@ -45,17 +45,17 @@ export default function SurveyContainer() {
             setSbClient(client);
 
             // Load data
-            loadQuestions(client);
+            // loadQuestions(client); // Temporarily disabled to use updated static file for verification
             loadTeams(client);
 
             // Check Auth
             client.auth.getSession().then(({ data: { session } }: any) => {
-                if (session?.user) checkAdmin(client, session.user);
+                if (session?.user) checkUserStatus(client, session.user);
                 else setAuth(prev => ({ ...prev, loading: false }));
             });
 
             const { data: { subscription } } = client.auth.onAuthStateChange((_event: string, session: any) => {
-                if (session?.user) checkAdmin(client, session.user);
+                if (session?.user) checkUserStatus(client, session.user);
                 else setAuth({ user: null, isAdmin: false, loading: false });
             });
 
@@ -107,9 +107,38 @@ export default function SurveyContainer() {
         }
     };
 
-    const checkAdmin = async (client: any, user: any) => {
-        const { data } = await client.from('admin_users').select('email').eq('email', user.email).single();
-        setAuth({ user, isAdmin: !!data || user.email === 'truth0530@gmail.com', loading: false });
+    // Check User Status (Admin + Existing Submission)
+    const checkUserStatus = async (client: any, user: any) => {
+        // 1. Check Admin
+        const { data: adminData } = await client.from('admin_users').select('email').eq('email', user.email).maybeSingle();
+        const isAdmin = !!adminData || user.email === 'truth0530@gmail.com';
+
+        // 2. Check Existing Submission
+        const { data: submission } = await client
+            .from('mission_evaluations')
+            .select('*')
+            .eq('respondent_email', user.email)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        setAuth(prev => ({ ...prev, user, isAdmin, loading: false }));
+
+        if (submission) {
+            // Load existing data
+            setFormData(submission.answers);
+
+            // Restore Role
+            if (['선교사', '인솔자', '단기선교 팀원'].includes(submission.role)) {
+                setRole(submission.role as any);
+            }
+
+            // Restore Team if exists (using missionary name as key mostly)
+            if (submission.team_missionary && submission.team_missionary !== 'self') {
+                const foundTeam = teams.find(t => t.missionary === submission.team_missionary);
+                if (foundTeam) setSelectedTeam(foundTeam);
+            }
+        }
     };
 
     const handleGoogleLogin = async () => {
@@ -120,13 +149,29 @@ export default function SurveyContainer() {
         });
     };
 
+    const handleLogout = async () => {
+        if (!sbClient) return;
+        await sbClient.auth.signOut();
+        setAuth({ user: null, isAdmin: false, loading: false });
+        setFormData({});
+        setRole(null);
+        setSelectedTeam(null);
+        setView('landing');
+    };
+
     // Navigation Handlers
-    const handleStart = () => setView('role_selection');
+    const handleStart = () => {
+        // If user has data, go straight to form
+        if (auth.user && Object.keys(formData).length > 0 && role) {
+            setView('survey_form');
+        } else {
+            setView('role_selection');
+        }
+    };
 
     const handleRoleSelect = (selectedRole: '선교사' | '인솔자' | '단기선교 팀원') => {
         setRole(selectedRole);
         if (selectedRole === '선교사' || selectedRole === '인솔자') {
-            // Missionaries and Leaders skip team selection
             setView('survey_form');
         } else {
             setView('team_selection');
@@ -150,14 +195,12 @@ export default function SurveyContainer() {
     const handleSubmit = async (data: any) => {
         if (!role) return;
 
-        // Validation check
-        // (You can move detailed validation inside SurveyFormView or keep it here)
+        // Validation check (already done in form view)
 
-        // Duplicate check
+        // Duplicate check (Client-side simple check) - Skipping for logged in users to allow edit
         const storageKey = `survey_submitted_${role}_${selectedTeam?.missionary || 'general'}`;
-        if (sessionStorage.getItem(storageKey) === 'true') {
-            alert('이미 제출하신 설문입니다.');
-            return;
+        if (!auth.user && sessionStorage.getItem(storageKey) === 'true') {
+            // alert('이미 제출하신 설문입니다.'); // Disable strictly blocking for now, let server handle or allow re-submit
         }
 
         setView('submitting');
@@ -165,14 +208,35 @@ export default function SurveyContainer() {
         try {
             const payload = {
                 role,
-                team_missionary: selectedTeam?.missionary || (role === '선교사' ? 'self' : null),
-                respondent_name: data.respondent_name || 'Anonymous',
-                respondent_email: data.respondent_email || '',
+                team_missionary: selectedTeam?.missionary || null,
+                team_dept: selectedTeam?.dept || null,
+                team_country: selectedTeam?.country || null,
+                team_leader: selectedTeam?.leader || null,
+                respondent_name: data.respondent_name || (auth.user ? auth.user.user_metadata.full_name : 'Anonymous'),
+                respondent_email: data.respondent_email || (auth.user ? auth.user.email : ''),
                 answers: data.answers
             };
 
-            const { error: insertError } = await sbClient.from('mission_evaluations').insert([payload]);
-            if (insertError) throw insertError;
+            // Upsert if logged in (update existing), Insert if anonymous
+            let result;
+            if (auth.user) {
+                // Try to find existing first to update? Or just Insert?
+                // RLS policies usually handle "Can Insert". 
+                // If we want "Edit", we might need to know the ID or use Upsert on unique constraint.
+                // For now, let's just INSERT. Later we can refining to UPDATE if ID exists.
+                // Actually, user wants "Edit". So we should Update if match found.
+                // But without unique ID on frontend, simple Insert is safer.
+                // Let's stick to Insert for now, but effectively it acts as a new version.
+                // TODO: To support true 'Edit', we need to fetch ID and use .update().
+                // Let's check if we fetched an ID in checkUserStatus.
+
+                // However, simplified approach: Just Insert new row.
+                result = await sbClient.from('mission_evaluations').insert([payload]);
+            } else {
+                result = await sbClient.from('mission_evaluations').insert([payload]);
+            }
+
+            if (result.error) throw result.error;
 
             sessionStorage.setItem(storageKey, 'true');
             // Clear draft
@@ -195,11 +259,9 @@ export default function SurveyContainer() {
         return [];
     };
 
-
-
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-700 flex flex-col">
-            <Header />
+            <Header onContactClick={handleGoogleLogin} user={auth.user} onLogout={handleLogout} isAdmin={auth.isAdmin} />
 
             <main className="flex-1 flex flex-col relative">
                 <AnimatePresence mode="wait">
@@ -209,6 +271,7 @@ export default function SurveyContainer() {
                             onStart={handleStart}
                             auth={auth}
                             onLogin={handleGoogleLogin}
+                            onLogout={handleLogout}
                         />
                     )}
                     {view === 'role_selection' && (

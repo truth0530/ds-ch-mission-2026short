@@ -85,8 +85,15 @@ export const MISSIONARY_QUESTIONS: Question[] = [
 
 export const LEADER_QUESTIONS: Question[] = [
     { id: 'l_pre', type: 'scale', text: 'I. 사전모임 준비: 1. 준비를 위한 사전 모임 횟수나 내용, 분위기는 어떻다고 생각되는가? (1~7점)' },
-    { id: 'l1', type: 'text', text: '1. 만약에 내년에도 단기선교팀이 같은 사역지를 방문한다면 어떤 부분을 보완하기 원하는가?' },
-    { id: 'l2', type: 'text', text: '2. 사전에 현장 선교사님과의 소통은 얼만큼 효과적으로 진행되었는가? 보완되어야 한다면 어떤 부분인가?' },
+    { id: 'l_pre_1_reason', type: 'text', text: '1번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 'l_pre_2', type: 'scale', text: '2. 모임과 준비를 시작하는 시기는 적절했다고 생각되는가? (1~7점)' },
+    { id: 'l_pre_2_reason', type: 'text', text: '2번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 'l_pre_3', type: 'text', text: '3. 기타 사전 모임 및 준비에 대한 조언은?' },
+    { id: 'l_school', type: 'scale', text: '4. 단기선교학교는 도움이 되었다고 생각하는가? (1~7점)' },
+    { id: 'l_school_reason', type: 'text', text: '4번 문항에서 해당 번호를 선택한 이유는 무엇인가?' },
+    { id: 'l_school_advice', type: 'text', text: '5. 기타 단기선교학교에 대한 조언은?' },
+    { id: 'l1', type: 'text', text: 'Q2.1. 만약에 내년에도 단기선교팀이 같은 사역지를 방문한다면 어떤 부분을 보완하기 원하는가?' },
+    { id: 'l2', type: 'text', text: 'Q3.2. 사전에 현장 선교사님과의 소통은 얼만큼 효과적으로 진행되었는가? 보완되어야 한다면 어떤 부분인가?' },
     ...COMMON_SHARED_QUESTIONS
 ];
 

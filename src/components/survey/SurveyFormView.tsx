@@ -13,7 +13,6 @@ interface SurveyFormViewProps {
 
 export default function SurveyFormView({ role, team, questions, onSubmit, onBack, initialData = {} }: SurveyFormViewProps) {
     const [answers, setAnswers] = useState<any>(initialData);
-    const [respondentName, setRespondentName] = useState('');
     const [errors, setErrors] = useState<string[]>([]);
 
     // Smooth scroll to first error
@@ -34,6 +33,7 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
 
     const validate = () => {
         const newErrors: string[] = [];
+
         questions.forEach(q => {
             const val = answers[q.id];
             if (!val || (Array.isArray(val) && val.length === 0) || (typeof val === 'string' && !val.trim())) {
@@ -46,10 +46,19 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
 
     const handleSubmit = () => {
         if (validate()) {
-            onSubmit({ answers, respondent_name: respondentName });
+            onSubmit({ answers });
         } else {
             alert('작성하지 않은 문항이 있습니다. 확인해주세요.');
         }
+    };
+
+    const getBadgeColor = (dept: string) => {
+        if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
+        if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
+        if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        if (dept.includes('오픈')) return 'bg-amber-100 text-amber-700 border-amber-200';
+        if (dept.includes('글로벌')) return 'bg-violet-100 text-violet-700 border-violet-200';
+        return 'bg-slate-100 text-slate-600 border-slate-200';
     };
 
     return (
@@ -60,23 +69,60 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
             className="flex flex-col min-h-screen bg-slate-50"
         >
             {/* Header */}
-            <div className="sticky top-16 bg-white/90 backdrop-blur-md z-20 px-4 py-4 border-b border-indigo-100 shadow-sm">
+            <div className="sticky top-0 bg-white/90 backdrop-blur-md z-20 px-4 py-3 border-b border-indigo-100 shadow-sm">
                 <div className="max-w-xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
-                        <div>
-                            <h2 className="text-sm font-bold text-indigo-600">
-                                {role === '선교사' ? '단기선교팀 평가' : role === '인솔자' ? '인솔자 사역 평가' : '선교사님 평가'}
-                            </h2>
-                            <p className="text-xs text-slate-500 line-clamp-1">
-                                {team ? `${team.missionary} (${team.country})` : role === '인솔자' ? 'Leader Survey' : 'Missionary Survey'}
-                            </p>
-                        </div>
+
+                        {team ? (
+                            <div className="flex items-center gap-3">
+                                {/* Country Circle */}
+                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 flex-shrink-0">
+                                    <span className="text-xs font-bold text-indigo-700 text-center leading-none px-0.5 break-keep">
+                                        {team.country}
+                                    </span>
+                                </div>
+                                {/* Info */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <h2 className="text-sm font-bold text-slate-800 leading-none">인솔 {team.leader}</h2>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider leading-none ${getBadgeColor(team.dept)}`}>
+                                            {team.dept}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium leading-none">{team.missionary}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3">
+                                {/* Role Icon Circle */}
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border flex-shrink-0 ${role === '선교사' ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                    {role === '선교사' ? (
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                                        </svg>
+                                    )}
+                                </div>
+                                {/* Info */}
+                                <div>
+                                    <h2 className={`text-sm font-bold leading-none mb-1 ${role === '선교사' ? 'text-blue-900' : 'text-emerald-900'}`}>
+                                        {role === '선교사' ? '선교사의 의견입니다' : '인솔자의 의견입니다'}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 font-medium leading-none">
+                                        {role === '선교사' ? '단기선교팀 평가' : '인솔자 사역 평가'}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    <div className="text-xs font-medium px-3 py-1 bg-slate-100 rounded-full text-slate-600">
-                        {Object.keys(answers).length} / {questions.length} 완료
+                    <div className="text-xs font-medium px-3 py-1 bg-slate-100 rounded-full text-slate-600 whitespace-nowrap ml-2">
+                        {Object.keys(answers).length}/{questions.length}
                     </div>
                 </div>
             </div>
