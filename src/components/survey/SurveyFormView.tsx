@@ -1,19 +1,31 @@
-import React, { useState, useEffect } from 'react';
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Question, TeamInfo } from '@/lib/surveyData';
+import { Question, TeamInfo, RoleType } from '@/types';
+import { SurveyFormData } from '@/types/survey';
+import { sanitizeInput } from '@/lib/validators';
 
 interface SurveyFormViewProps {
-    role: string;
+    role: RoleType;
     team: TeamInfo | null;
     questions: Question[];
-    onSubmit: (data: any) => void;
+    onSubmit: (data: SurveyFormData) => void;
     onBack: () => void;
-    initialData?: any;
+    initialData?: Record<string, string | number | string[]>;
 }
 
-export default function SurveyFormView({ role, team, questions, onSubmit, onBack, initialData = {} }: SurveyFormViewProps) {
-    const [answers, setAnswers] = useState<any>(initialData);
+export default function SurveyFormView({
+    role,
+    team,
+    questions,
+    onSubmit,
+    onBack,
+    initialData = {}
+}: SurveyFormViewProps) {
+    const [answers, setAnswers] = useState<Record<string, string | number | string[]>>(initialData);
     const [errors, setErrors] = useState<string[]>([]);
+    const [showValidationError, setShowValidationError] = useState(false);
 
     // Smooth scroll to first error
     useEffect(() => {
@@ -23,36 +35,39 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
         }
     }, [errors]);
 
-    const handleAnswerChange = (id: string, value: any) => {
-        setAnswers((prev: any) => ({ ...prev, [id]: value }));
+    const handleAnswerChange = useCallback((id: string, value: string | number | string[]) => {
+        setAnswers(prev => ({ ...prev, [id]: value }));
         // Clear error if exists
         if (errors.includes(id)) {
             setErrors(prev => prev.filter(e => e !== id));
         }
-    };
+        setShowValidationError(false);
+    }, [errors]);
 
-    const validate = () => {
+    const validate = useCallback((): boolean => {
         const newErrors: string[] = [];
 
         questions.forEach(q => {
             const val = answers[q.id];
-            if (!val || (Array.isArray(val) && val.length === 0) || (typeof val === 'string' && !val.trim())) {
+            if (val === undefined || val === null ||
+                (Array.isArray(val) && val.length === 0) ||
+                (typeof val === 'string' && !val.trim())) {
                 newErrors.push(q.id);
             }
         });
         setErrors(newErrors);
         return newErrors.length === 0;
-    };
+    }, [questions, answers]);
 
-    const handleSubmit = () => {
+    const handleSubmit = useCallback(() => {
         if (validate()) {
             onSubmit({ answers });
         } else {
-            alert('작성하지 않은 문항이 있습니다. 확인해주세요.');
+            setShowValidationError(true);
         }
-    };
+    }, [validate, onSubmit, answers]);
 
-    const getBadgeColor = (dept: string) => {
+    const getBadgeColor = (dept: string): string => {
         if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
         if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
         if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -127,6 +142,13 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
                 </div>
             </div>
 
+            {/* Validation Error Toast */}
+            {showValidationError && errors.length > 0 && (
+                <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg animate-bounce">
+                    작성하지 않은 문항이 {errors.length}개 있습니다. 확인해주세요.
+                </div>
+            )}
+
             {/* Content */}
             <div className="flex-1 p-4 lg:p-8 max-w-xl mx-auto w-full">
                 <div className="space-y-8">
@@ -138,12 +160,12 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
                         >
                             <label className="block text-slate-800 font-bold mb-3 leading-relaxed">
                                 <span className={`mr-2 ${errors.includes(q.id) ? 'text-red-500' : 'text-indigo-600'}`}>Q{idx + 1}.</span>
-                                {q.text}
+                                {sanitizeInput(q.text)}
                             </label>
 
                             {q.type === 'scale' && (
                                 <ScaleInput
-                                    value={answers[q.id]}
+                                    value={answers[q.id] as number}
                                     onChange={v => handleAnswerChange(q.id, v)}
                                 />
                             )}
@@ -151,14 +173,14 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
                             {q.type === 'multi_select' && (
                                 <MultiSelectInput
                                     options={q.options || []}
-                                    value={answers[q.id] || []}
+                                    value={(answers[q.id] as string[]) || []}
                                     onChange={v => handleAnswerChange(q.id, v)}
                                 />
                             )}
 
                             {q.type === 'text' && (
                                 <textarea
-                                    value={answers[q.id] || ''}
+                                    value={(answers[q.id] as string) || ''}
                                     onChange={e => handleAnswerChange(q.id, e.target.value)}
                                     placeholder="내용을 자유롭게 작성해주세요."
                                     className="w-full p-4 min-h-[120px] bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none shadow-sm text-slate-700 placeholder-slate-400 resize-none"
@@ -167,7 +189,7 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
 
                             {errors.includes(q.id) && (
                                 <p className="mt-2 text-sm text-red-500 font-medium flex items-center gap-1">
-                                    ⚠️ 필수 항목입니다.
+                                    필수 항목입니다.
                                 </p>
                             )}
                         </div>
@@ -188,15 +210,21 @@ export default function SurveyFormView({ role, team, questions, onSubmit, onBack
     );
 }
 
-// Sub-components for cleaner file
+// Sub-components
 
-function ScaleInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+interface ScaleInputProps {
+    value: number | undefined;
+    onChange: (v: number) => void;
+}
+
+function ScaleInput({ value, onChange }: ScaleInputProps) {
     return (
         <div className="space-y-3">
             <div className="flex justify-between items-center bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
                 {[1, 2, 3, 4, 5, 6, 7].map((num) => (
                     <button
                         key={num}
+                        type="button"
                         onClick={() => onChange(num)}
                         className={`
                             relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all
@@ -223,7 +251,13 @@ function ScaleInput({ value, onChange }: { value: number; onChange: (v: number) 
     );
 }
 
-function MultiSelectInput({ options, value, onChange }: { options: string[], value: string[], onChange: (v: string[]) => void }) {
+interface MultiSelectInputProps {
+    options: string[];
+    value: string[];
+    onChange: (v: string[]) => void;
+}
+
+function MultiSelectInput({ options, value, onChange }: MultiSelectInputProps) {
     // Extract 'Other' text if it exists
     const otherOption = value.find(v => v.startsWith('기타:'));
     const otherText = otherOption ? otherOption.replace('기타:', '').trim() : '';
@@ -259,6 +293,7 @@ function MultiSelectInput({ options, value, onChange }: { options: string[], val
                 return (
                     <div key={opt}>
                         <button
+                            type="button"
                             onClick={() => toggle(opt)}
                             className={`
                                 w-full p-4 rounded-xl text-left transition-all border flex items-center gap-3
@@ -273,7 +308,7 @@ function MultiSelectInput({ options, value, onChange }: { options: string[], val
                             `}>
                                 {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                             </div>
-                            <span className="text-sm font-medium">{opt}</span>
+                            <span className="text-sm font-medium">{sanitizeInput(opt)}</span>
                         </button>
 
                         {isOther && isSelected && (

@@ -1,15 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createSupabaseClient } from '@/lib/supabase';
-
-const ENV = {
-    PROJECT_NAME: '2026mission_short',
-    PROJECT_ID: 'fjdorhdauvumfqhqujaj',
-    get SUPABASE_URL() {
-        return process.env.NEXT_PUBLIC_SUPABASE_URL || `https://${this.PROJECT_ID}.supabase.co`;
-    }
-};
+import { createSupabaseClient, SupabaseClient } from '@/lib/supabase';
+import { ENV_CONFIG, TABLES } from '@/lib/constants';
 
 import {
     MISSIONARY_QUESTIONS,
@@ -196,12 +189,16 @@ export default function SurveyCanvas() {
 
 
     useEffect(() => {
-        const url = ENV.SUPABASE_URL;
+        const url = ENV_CONFIG.SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (key && key !== 'your_anon_key_here') {
             (async () => {
                 try {
                     const client = createSupabaseClient(url, key);
+                    if (!client) {
+                        setState(prev => ({ ...prev, auth: { ...prev.auth, loading: false } }));
+                        return;
+                    }
                     setSbClient(client);
                     await loadQuestions(client);
 
@@ -223,11 +220,12 @@ export default function SurveyCanvas() {
         }
     }, []);
 
-    const checkAdmin = async (client: any, user: any) => {
-        const { data } = await client.from('admin_users').select('email').eq('email', user.email).single();
+    const checkAdmin = async (client: SupabaseClient, user: any) => {
+        const { data } = await client.from(TABLES.ADMIN_USERS).select('email').eq('email', user.email).single();
+        const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
         setState(prev => ({
             ...prev,
-            auth: { user, isAdmin: !!data || user.email === 'truth0530@gmail.com', loading: false }
+            auth: { user, isAdmin: !!data || !!(fallbackEmail && user.email === fallbackEmail), loading: false }
         }));
     };
 
@@ -260,8 +258,9 @@ export default function SurveyCanvas() {
         if (isInitialized) {
             resize();
             window.addEventListener('resize', resize);
+            // Use modulo to prevent infinite growth of cursorBlink value
             const interval = setInterval(() => {
-                setState(prev => ({ ...prev, cursorBlink: prev.cursorBlink + 1 }));
+                setState(prev => ({ ...prev, cursorBlink: (prev.cursorBlink + 1) % 60 }));
             }, 16);
 
             const handleWheel = (e: WheelEvent) => {
@@ -1069,6 +1068,9 @@ export default function SurveyCanvas() {
             <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden">
                 <canvas
                     ref={canvasRef}
+                    role="application"
+                    aria-label="선교 설문조사 폼"
+                    tabIndex={0}
                     onMouseMove={(e) => {
                         const rect = canvasRef.current?.getBoundingClientRect();
                         if (rect) setState(prev => ({ ...prev, mouse: { ...prev.mouse, x: e.clientX - rect.left, y: e.clientY - rect.top } }));

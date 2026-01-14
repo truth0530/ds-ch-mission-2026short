@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { getSbClient } from '@/lib/supabase';
 import { INITIAL_QUESTIONS, Question, MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
+import { ENV_CONFIG, TABLES } from '@/lib/constants';
+import { isValidEmail, generateId } from '@/lib/validators';
+import { User } from '@supabase/supabase-js';
 
 interface AdminUser {
     email: string;
@@ -12,13 +14,12 @@ interface AdminUser {
 }
 
 export default function AdminQuestionsPage() {
-    const router = useRouter();
     const [activeTab, setActiveTab] = useState<'questions' | 'admins' | 'teams'>('questions');
     const [questions, setQuestions] = useState<Question[]>([]);
     const [admins, setAdmins] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [authLoading, setAuthLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [isAuthorized, setIsAuthorized] = useState(false);
 
     // Question Edit State
@@ -35,7 +36,7 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client) return;
         const { data, error } = await client
-            .from('mission_teams')
+            .from(TABLES.TEAMS)
             .select('*')
             .order('country', { ascending: true });
         if (!error) setTeams(data || []);
@@ -51,7 +52,7 @@ export default function AdminQuestionsPage() {
                 if (!client) return;
 
                 const { error } = await client
-                    .from('mission_teams')
+                    .from(TABLES.TEAMS)
                     .insert(MISSION_TEAMS);
 
                 if (error) showNotification('팀 데이터 로드 실패: ' + error.message, 'error');
@@ -79,15 +80,15 @@ export default function AdminQuestionsPage() {
         };
 
         let error;
-        if (editingTeam && (editingTeam as any).id) {
+        if (editingTeam?.id) {
             const { error: updateError } = await client
-                .from('mission_teams')
+                .from(TABLES.TEAMS)
                 .update(teamData)
-                .eq('id', (editingTeam as any).id);
+                .eq('id', editingTeam.id);
             error = updateError;
         } else {
             const { error: insertError } = await client
-                .from('mission_teams')
+                .from(TABLES.TEAMS)
                 .insert([teamData]);
             error = insertError;
         }
@@ -107,7 +108,7 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client) return;
 
-        const { error } = await client.from('mission_teams').delete().eq('id', id);
+        const { error } = await client.from(TABLES.TEAMS).delete().eq('id', id);
         if (error) showNotification('삭제 실패: ' + error.message, 'error');
         else {
             fetchTeams();
@@ -125,7 +126,7 @@ export default function AdminQuestionsPage() {
             return;
         }
 
-        const { data: { subscription } } = client.auth.onAuthStateChange((_event: any, session: any) => {
+        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
                 checkAuthorization(client, session.user);
             } else {
@@ -139,28 +140,49 @@ export default function AdminQuestionsPage() {
 
     useEffect(() => {
         if (isAuthorized) {
-            fetchQuestions();
-            fetchAdmins();
-            fetchTeams();
+            // Fetch all data in parallel with error handling
+            const fetchAllData = async () => {
+                const results = await Promise.allSettled([
+                    fetchQuestions(),
+                    fetchAdmins(),
+                    fetchTeams()
+                ]);
+                results.forEach((result, index) => {
+                    if (result.status === 'rejected') {
+                        const names = ['questions', 'admins', 'teams'];
+                        console.error(`Failed to fetch ${names[index]}:`, result.reason);
+                    }
+                });
+            };
+            fetchAllData();
         }
     }, [isAuthorized]);
 
-    const checkAuthorization = async (client: any, currentUser: any) => {
-        const { data, error } = await client
-            .from('admin_users')
-            .select('*')
-            .eq('email', currentUser.email)
-            .single();
+    const checkAuthorization = async (client: ReturnType<typeof getSbClient>, currentUser: User) => {
+        if (!client) return;
 
-        if (data || currentUser.email === 'truth0530@gmail.com') {
-            setUser(currentUser);
-            setIsAuthorized(true);
-        } else {
-            console.warn('Unauthorized email:', currentUser.email);
+        try {
+            const { data } = await client
+                .from(TABLES.ADMIN_USERS)
+                .select('*')
+                .eq('email', currentUser.email)
+                .maybeSingle();
+
+            if (data || currentUser.email === ENV_CONFIG.ADMIN_EMAIL) {
+                setUser(currentUser);
+                setIsAuthorized(true);
+            } else {
+                console.warn('Unauthorized email:', currentUser.email);
+                setIsAuthorized(false);
+                setUser(currentUser);
+            }
+        } catch (error) {
+            console.error('Authorization check failed:', error);
             setIsAuthorized(false);
             setUser(currentUser);
+        } finally {
+            setAuthLoading(false);
         }
-        setAuthLoading(false);
     };
 
     const handleLogin = async () => {
@@ -203,12 +225,11 @@ export default function AdminQuestionsPage() {
         if (!client) return;
         setLoading(true);
         const { data, error } = await client
-            .from('survey_questions')
+            .from(TABLES.QUESTIONS)
             .select('*')
             .order('sort_order', { ascending: true });
 
         if (!error) {
-            console.log('Fetched questions count:', (data || []).length);
             setQuestions(data || []);
         }
         setLoading(false);
@@ -218,7 +239,7 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client) return;
         const { data, error } = await client
-            .from('admin_users')
+            .from(TABLES.ADMIN_USERS)
             .select('*')
             .order('created_at', { ascending: false });
         if (!error) setAdmins(data || []);
@@ -228,7 +249,7 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client) return;
         const { error } = await client
-            .from('survey_questions')
+            .from(TABLES.QUESTIONS)
             .update(editForm)
             .eq('id', id);
 
@@ -244,7 +265,7 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client) return;
         const { error } = await client
-            .from('survey_questions')
+            .from(TABLES.QUESTIONS)
             .update({ is_hidden: !q.is_hidden })
             .eq('id', q.id);
         if (!error) fetchQuestions();
@@ -253,9 +274,9 @@ export default function AdminQuestionsPage() {
     const handleAddQuestion = async () => {
         const client = getSbClient();
         if (!client) return;
-        const newId = `new_${Date.now()}`;
+        const newId = generateId('q');
         const { error } = await client
-            .from('survey_questions')
+            .from(TABLES.QUESTIONS)
             .insert([{
                 id: newId,
                 role: 'common',
@@ -285,7 +306,7 @@ export default function AdminQuestionsPage() {
 
         const client = getSbClient();
         if (!client) return;
-        const { error } = await client.from('survey_questions').delete().eq('id', id);
+        const { error } = await client.from(TABLES.QUESTIONS).delete().eq('id', id);
         if (!error) {
             fetchQuestions();
             showNotification('문항이 삭제되었습니다.', 'success');
@@ -296,10 +317,17 @@ export default function AdminQuestionsPage() {
 
     const handleAddAdmin = async () => {
         const client = getSbClient();
-        if (!client || !newAdminEmail) return;
+        if (!client || !newAdminEmail || !user) return;
+
+        // Email validation
+        if (!isValidEmail(newAdminEmail)) {
+            showNotification('유효한 이메일 주소를 입력해주세요.', 'error');
+            return;
+        }
+
         const { error } = await client
-            .from('admin_users')
-            .insert([{ email: newAdminEmail, added_by: user.email }]);
+            .from(TABLES.ADMIN_USERS)
+            .insert([{ email: newAdminEmail.trim().toLowerCase(), added_by: user.email }]);
 
         if (error) showNotification('관리자 추가 실패: ' + error.message, 'error');
         else {
@@ -311,12 +339,12 @@ export default function AdminQuestionsPage() {
 
     const handleDeleteAdmin = async (email: string) => {
         const client = getSbClient();
-        if (!client) return;
+        if (!client || !user) return;
         if (email === user.email) { showNotification('자기 자신은 삭제할 수 없습니다.', 'error'); return; }
 
         if (!confirm(`${email} 관리자를 권한 해제하시겠습니까?`)) return;
 
-        const { error } = await client.from('admin_users').delete().eq('email', email);
+        const { error } = await client.from(TABLES.ADMIN_USERS).delete().eq('email', email);
         if (error) showNotification('삭제 실패: ' + error.message, 'error');
         else {
             fetchAdmins();
@@ -342,7 +370,7 @@ export default function AdminQuestionsPage() {
                 if (!client) return;
 
                 const { error } = await client
-                    .from('survey_questions')
+                    .from(TABLES.QUESTIONS)
                     .upsert(INITIAL_QUESTIONS.map(q => ({ ...q, is_hidden: false })));
 
                 if (error) {
@@ -473,7 +501,7 @@ export default function AdminQuestionsPage() {
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:flex flex-col items-end mr-2">
-                            <span className="text-xs font-bold text-gray-900">{user.email}</span>
+                            <span className="text-xs font-bold text-gray-900">{user?.email}</span>
                             <span className="text-[10px] text-gray-400">Authorized Admin</span>
                         </div>
                         <button
@@ -734,7 +762,7 @@ export default function AdminQuestionsPage() {
                                                         {admin.email[0].toUpperCase()}
                                                     </div>
                                                     <span className="font-bold text-gray-900">{admin.email}</span>
-                                                    {admin.email === user.email && (
+                                                    {admin.email === user?.email && (
                                                         <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-black uppercase">You</span>
                                                     )}
                                                 </div>
@@ -745,7 +773,7 @@ export default function AdminQuestionsPage() {
                                             <td className="px-8 py-6 text-right">
                                                 <button
                                                     onClick={() => handleDeleteAdmin(admin.email)}
-                                                    className={`text-xs font-black uppercase tracking-widest py-2 px-4 rounded-xl transition-all ${admin.email === user.email ? 'text-gray-200 cursor-not-allowed' : 'text-red-300 hover:text-red-600 hover:bg-red-50'}`}
+                                                    className={`text-xs font-black uppercase tracking-widest py-2 px-4 rounded-xl transition-all ${admin.email === user?.email ? 'text-gray-200 cursor-not-allowed' : 'text-red-300 hover:text-red-600 hover:bg-red-50'}`}
                                                 >
                                                     Revoke
                                                 </button>

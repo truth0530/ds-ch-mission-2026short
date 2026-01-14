@@ -1,36 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { User } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-let sbClientInstance: any = null;
-const getSbClient = () => {
-    if (!sbClientInstance && SB_URL && SB_KEY) {
-        sbClientInstance = createClient(SB_URL, SB_KEY);
-    }
-    return sbClientInstance;
-};
-
-interface Evaluation {
-    id: string;
-    role: string;
-    team_dept: string;
-    team_country: string;
-    team_missionary: string;
-    team_leader: string;
-    respondent_email: string | null;
-    respondent_name: string | null;
-    submission_date: string;
-    response_status: string;
-    answers: Record<string, any>;
-    created_at: string;
-}
-
-import { MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
+import { getSbClient, SupabaseClient } from '@/lib/supabase';
+import { ENV_CONFIG, TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
+import { Evaluation, TeamInfo, ToastMessage } from '@/types';
+import { validateEvaluations } from '@/lib/validators';
+import { MISSION_TEAMS } from '@/lib/surveyData';
+import { ToastContainer } from '@/components/ui/Toast';
 
 interface Stats {
     total: number;
@@ -43,7 +21,7 @@ interface Stats {
 export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [authLoading, setAuthLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [isAuthorized, setIsAuthorized] = useState(false);
 
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -55,6 +33,11 @@ export default function AdminDashboard() {
         leaders: []
     });
 
+    // Pagination
+    const [page, setPage] = useState<number>(PAGINATION_DEFAULTS.INITIAL_PAGE);
+    const [totalCount, setTotalCount] = useState(0);
+    const pageSize = PAGINATION_DEFAULTS.PAGE_SIZE;
+
     // Filters
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [teamFilter, setTeamFilter] = useState<string>('all');
@@ -63,7 +46,28 @@ export default function AdminDashboard() {
     // Detail Modal
     const [selectedEval, setSelectedEval] = useState<Evaluation | null>(null);
 
+    // Teams
+    const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS);
+
+    // Toast
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+    const showToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
+        const id = `toast-${Date.now()}`;
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+    }, []);
+
+    const hideToast = useCallback((id: string) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+
     useEffect(() => {
+        let isMounted = true;
+        let subscription: { unsubscribe: () => void } | null = null;
+
         const client = getSbClient();
         if (!client) {
             console.error('Supabase client not initialized. Check environment variables.');
@@ -71,19 +75,27 @@ export default function AdminDashboard() {
             return;
         }
 
-        // Check initial session
-        client.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
-            if (session?.user) {
-                checkAuthorization(client, session.user);
-            } else {
-                setUser(null);
-                setIsAuthorized(false);
+        // Check initial session with error handling
+        client.auth.getSession()
+            .then(({ data: { session } }) => {
+                if (!isMounted) return;
+                if (session?.user) {
+                    checkAuthorization(client, session.user);
+                } else {
+                    setUser(null);
+                    setIsAuthorized(false);
+                    setAuthLoading(false);
+                }
+            })
+            .catch((error) => {
+                if (!isMounted) return;
+                console.error('Failed to get session:', error);
                 setAuthLoading(false);
-            }
-        });
+            });
 
         // Listen for auth changes
-        const { data: { subscription } } = client.auth.onAuthStateChange((_event: any, session: any) => {
+        const { data } = client.auth.onAuthStateChange((_event, session) => {
+            if (!isMounted) return;
             if (session?.user) {
                 checkAuthorization(client, session.user);
             } else {
@@ -92,18 +104,23 @@ export default function AdminDashboard() {
                 setAuthLoading(false);
             }
         });
+        subscription = data.subscription;
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription?.unsubscribe();
+        };
     }, []);
 
-    const checkAuthorization = async (client: any, currentUser: any) => {
+    const checkAuthorization = async (client: SupabaseClient, currentUser: User) => {
         const { data } = await client
-            .from('admin_users')
-            .select('*')
+            .from(TABLES.ADMIN_USERS)
+            .select('email')
             .eq('email', currentUser.email)
-            .single();
+            .maybeSingle();
 
-        if (data || currentUser.email === 'truth0530@gmail.com') {
+        const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
+        if (data || (fallbackEmail && currentUser.email === fallbackEmail)) {
             setUser(currentUser);
             setIsAuthorized(true);
             fetchData();
@@ -131,37 +148,48 @@ export default function AdminDashboard() {
         await client.auth.signOut();
         window.location.reload();
     };
-    const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS); // Default to static
 
-    // Fetch Data
-    const fetchData = async () => {
+    // Fetch Data with Promise.all for better performance
+    const fetchData = async (pageNum = 0) => {
         setLoading(true);
         const client = getSbClient();
         if (!client) return;
 
-        // Fetch Teams
-        const { data: teamData } = await client.from('mission_teams').select('*').order('country', { ascending: true });
-        const currentTeams = teamData && teamData.length > 0 ? teamData : MISSION_TEAMS;
-        setTeams(currentTeams);
+        try {
+            // Fetch Teams and Evaluations in parallel
+            const [teamsResult, evaluationsResult] = await Promise.all([
+                client.from(TABLES.TEAMS).select('*').order('country', { ascending: true }),
+                client
+                    .from(TABLES.EVALUATIONS)
+                    .select('*', { count: 'exact' })
+                    .order('created_at', { ascending: false })
+                    .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1)
+            ]);
 
-        // Fetch Evaluations
-        const { data, error } = await client
-            .from('mission_evaluations')
-            .select('*')
-            .order('created_at', { ascending: false });
+            // Handle Teams
+            const currentTeams = teamsResult.data && teamsResult.data.length > 0
+                ? (teamsResult.data as TeamInfo[])
+                : MISSION_TEAMS;
+            setTeams(currentTeams);
 
-        if (error) {
-            console.error('Data Fetch Error:', error);
-            alert(`데이터 로드 실패: ${error.message || JSON.stringify(error)}`);
-        } else {
-            setEvaluations(data as Evaluation[]);
-            calculateStats(data as Evaluation[], currentTeams);
+            // Handle Evaluations
+            if (evaluationsResult.error) {
+                showToast(`데이터 로드 실패: ${evaluationsResult.error.message}`, 'error');
+            } else {
+                const validatedData = validateEvaluations(evaluationsResult.data || []);
+                setEvaluations(validatedData);
+                setTotalCount(evaluationsResult.count || 0);
+                calculateStats(validatedData, currentTeams);
+            }
+        } catch (error) {
+            showToast('데이터를 불러오는 중 오류가 발생했습니다.', 'error');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const calculateStats = (data: Evaluation[], currentTeams: TeamInfo[] = teams) => {
-        const stats: Stats = {
+        const newStats: Stats = {
             total: data.length,
             byRole: { missionary: 0, leader: 0, team_member: 0 },
             teamMemberByTeam: {},
@@ -171,41 +199,42 @@ export default function AdminDashboard() {
 
         // Initialize all teams with 0
         currentTeams.forEach(t => {
-            if (t.missionary) stats.teamMemberByTeam[t.missionary] = 0;
+            if (t.missionary) newStats.teamMemberByTeam[t.missionary] = 0;
         });
 
         data.forEach(evaluation => {
             // Count by role
             if (evaluation.role === '선교사') {
-                stats.byRole.missionary++;
-                stats.missionaries.push(evaluation);
+                newStats.byRole.missionary++;
+                newStats.missionaries.push(evaluation);
             } else if (evaluation.role === '인솔자') {
-                stats.byRole.leader++;
-                stats.leaders.push(evaluation);
+                newStats.byRole.leader++;
+                newStats.leaders.push(evaluation);
             } else if (evaluation.role === '단기선교 팀원') {
-                stats.byRole.team_member++;
-                // Count team members by team
+                newStats.byRole.team_member++;
                 const teamKey = evaluation.team_missionary || 'Unknown';
-                stats.teamMemberByTeam[teamKey] = (stats.teamMemberByTeam[teamKey] || 0) + 1;
+                newStats.teamMemberByTeam[teamKey] = (newStats.teamMemberByTeam[teamKey] || 0) + 1;
             }
         });
 
-        setStats(stats);
+        setStats(newStats);
     };
 
-    const filteredEvaluations = evaluations.filter(evaluation => {
-        if (roleFilter !== 'all' && evaluation.role !== roleFilter) return false;
-        if (teamFilter !== 'all' && evaluation.team_missionary !== teamFilter) return false;
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            return (
-                evaluation.respondent_name?.toLowerCase().includes(query) ||
-                evaluation.respondent_email?.toLowerCase().includes(query) ||
-                evaluation.team_missionary?.toLowerCase().includes(query)
-            );
-        }
-        return true;
-    });
+    const filteredEvaluations = useMemo(() => {
+        return evaluations.filter(evaluation => {
+            if (roleFilter !== 'all' && evaluation.role !== roleFilter) return false;
+            if (teamFilter !== 'all' && evaluation.team_missionary !== teamFilter) return false;
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                return (
+                    evaluation.respondent_name?.toLowerCase().includes(query) ||
+                    evaluation.respondent_email?.toLowerCase().includes(query) ||
+                    evaluation.team_missionary?.toLowerCase().includes(query)
+                );
+            }
+            return true;
+        });
+    }, [evaluations, roleFilter, teamFilter, searchQuery]);
 
     const exportToExcel = () => {
         const exportData = filteredEvaluations.map(evaluation => ({
@@ -216,8 +245,8 @@ export default function AdminDashboard() {
             '인솔자': evaluation.team_leader,
             '응답자 이름': evaluation.respondent_name || '익명',
             '응답자 이메일': evaluation.respondent_email || '익명',
-            '제출일': new Date(evaluation.submission_date).toLocaleDateString('ko-KR'),
-            '상태': evaluation.response_status,
+            '제출일': evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-',
+            '상태': evaluation.response_status || '-',
             '응답 수': Object.keys(evaluation.answers || {}).length,
             '제출 시각': new Date(evaluation.created_at).toLocaleString('ko-KR')
         }));
@@ -226,6 +255,7 @@ export default function AdminDashboard() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '설문 응답');
         XLSX.writeFile(wb, `설문응답_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Excel 파일이 다운로드되었습니다.', 'success');
     };
 
     const deleteEvaluation = async (id: string) => {
@@ -234,20 +264,35 @@ export default function AdminDashboard() {
         if (!client) return;
 
         const { error, count } = await client
-            .from('mission_evaluations')
+            .from(TABLES.EVALUATIONS)
             .delete({ count: 'exact' })
             .eq('id', id);
 
         if (error) {
-            console.error('Delete Error:', error);
-            alert('삭제 실패: ' + error.message);
+            showToast('삭제 실패: ' + error.message, 'error');
         } else if (count === 0) {
-            console.warn('Delete Count 0. ID:', id);
-            alert('삭제된 데이터가 없습니다. 권한이 없거나 이미 삭제되었을 수 있습니다.');
+            showToast('삭제된 데이터가 없습니다. 권한이 없거나 이미 삭제되었을 수 있습니다.', 'warning');
         } else {
-            alert('삭제되었습니다.');
-            fetchData();
+            showToast('삭제되었습니다.', 'success');
+            fetchData(page);
             setSelectedEval(null);
+        }
+    };
+
+    // Pagination handlers
+    const handlePrevPage = () => {
+        if (page > 0) {
+            const newPage = page - 1;
+            setPage(newPage);
+            fetchData(newPage);
+        }
+    };
+
+    const handleNextPage = () => {
+        if ((page + 1) * pageSize < totalCount) {
+            const newPage = page + 1;
+            setPage(newPage);
+            fetchData(newPage);
         }
     };
 
@@ -288,9 +333,13 @@ export default function AdminDashboard() {
     }
 
     const uniqueTeams = Array.from(new Set(evaluations.map(e => e.team_missionary))).filter(Boolean);
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans">
+            {/* Toast Container */}
+            <ToastContainer toasts={toasts} onClose={hideToast} />
+
             {/* Nav */}
             <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 px-6 py-4">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -310,7 +359,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:flex flex-col items-end mr-2">
-                            <span className="text-xs font-bold text-gray-900">{user.email}</span>
+                            <span className="text-xs font-bold text-gray-900">{user?.email}</span>
                             <span className="text-[10px] text-gray-400">Authorized Admin</span>
                         </div>
                         <button onClick={handleLogout} className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 hover:bg-red-50 transition-all border border-gray-100" title="로그아웃">
@@ -330,7 +379,7 @@ export default function AdminDashboard() {
                                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             </div>
                         </div>
-                        <div className="text-4xl font-black text-gray-900">{stats.total}</div>
+                        <div className="text-4xl font-black text-gray-900">{totalCount}</div>
                         <div className="text-xs text-gray-500 mt-1">전체 제출</div>
                     </div>
 
@@ -419,7 +468,7 @@ export default function AdminDashboard() {
                                         <li key={m.id} className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl">
                                             <div>
                                                 <div className="font-bold text-gray-900">{m.respondent_name || '익명'}</div>
-                                                <div className="text-xs text-gray-500">{new Date(m.submission_date).toLocaleDateString()}</div>
+                                                <div className="text-xs text-gray-500">{m.submission_date ? new Date(m.submission_date).toLocaleDateString() : '-'}</div>
                                             </div>
                                             <button onClick={() => setSelectedEval(m)} className="text-xs font-bold text-amber-600 hover:underline">보기</button>
                                         </li>
@@ -442,7 +491,7 @@ export default function AdminDashboard() {
                                         <li key={l.id} className="flex items-center justify-between p-3 bg-green-50/50 rounded-xl">
                                             <div>
                                                 <div className="font-bold text-gray-900">{l.respondent_name || '익명'}</div>
-                                                <div className="text-xs text-gray-500">{new Date(l.submission_date).toLocaleDateString()}</div>
+                                                <div className="text-xs text-gray-500">{l.submission_date ? new Date(l.submission_date).toLocaleDateString() : '-'}</div>
                                             </div>
                                             <button onClick={() => setSelectedEval(l)} className="text-xs font-bold text-green-600 hover:underline">보기</button>
                                         </li>
@@ -476,7 +525,7 @@ export default function AdminDashboard() {
                         <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
                             <option value="all">모든 팀</option>
                             {uniqueTeams.map(team => (
-                                <option key={team} value={team}>{team}</option>
+                                <option key={team} value={team!}>{team}</option>
                             ))}
                         </select>
                         <input type="text" placeholder="검색 (이름, 이메일, 팀)" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500" />
@@ -487,65 +536,100 @@ export default function AdminDashboard() {
                             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b-2 border-gray-100">
-                                        <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">역할</th>
-                                        <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">팀</th>
-                                        <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">응답자</th>
-                                        <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">제출일</th>
-                                        <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">응답수</th>
-                                        <th className="text-right py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">액션</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {filteredEvaluations.map(evaluation => (
-                                        <tr key={evaluation.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-4 px-4">
-                                                <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black ${evaluation.role === '선교사' ? 'bg-amber-100 text-amber-700' : evaluation.role === '인솔자' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
-                                                    {evaluation.role}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 font-bold text-gray-900">{evaluation.team_missionary}</td>
-                                            <td className="py-4 px-4">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-900">{evaluation.respondent_name || '익명'}</span>
-                                                    <span className="text-xs text-gray-400">{evaluation.respondent_email || '-'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-4 text-sm text-gray-600">{new Date(evaluation.submission_date).toLocaleDateString('ko-KR')}</td>
-                                            <td className="py-4 px-4 text-center">
-                                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold bg-blue-100 text-blue-700">
-                                                    {Object.keys(evaluation.answers || {}).length}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 text-right">
-                                                <button onClick={() => setSelectedEval(evaluation)} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-black hover:bg-blue-100 transition-all">
-                                                    상세보기
-                                                </button>
-                                            </td>
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b-2 border-gray-100">
+                                            <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">역할</th>
+                                            <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">팀</th>
+                                            <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">응답자</th>
+                                            <th className="text-left py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">제출일</th>
+                                            <th className="text-center py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">응답수</th>
+                                            <th className="text-right py-4 px-4 text-xs font-black text-gray-400 uppercase tracking-widest">액션</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {filteredEvaluations.length === 0 && (
-                                <div className="text-center py-20 text-gray-400 font-bold">
-                                    응답 데이터가 없습니다.
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {filteredEvaluations.map(evaluation => (
+                                            <tr key={evaluation.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="py-4 px-4">
+                                                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black ${evaluation.role === '선교사' ? 'bg-amber-100 text-amber-700' : evaluation.role === '인솔자' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
+                                                        {evaluation.role}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 font-bold text-gray-900">{evaluation.team_missionary}</td>
+                                                <td className="py-4 px-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-gray-900">{evaluation.respondent_name || '익명'}</span>
+                                                        <span className="text-xs text-gray-400">{evaluation.respondent_email || '-'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-sm text-gray-600">{evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-'}</td>
+                                                <td className="py-4 px-4 text-center">
+                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold bg-blue-100 text-blue-700">
+                                                        {Object.keys(evaluation.answers || {}).length}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <button onClick={() => setSelectedEval(evaluation)} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-black hover:bg-blue-100 transition-all">
+                                                        상세보기
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {filteredEvaluations.length === 0 && (
+                                    <div className="text-center py-20 text-gray-400 font-bold">
+                                        응답 데이터가 없습니다.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-gray-100">
+                                    <button
+                                        onClick={handlePrevPage}
+                                        disabled={page === 0}
+                                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-all"
+                                    >
+                                        이전
+                                    </button>
+                                    <span className="text-sm font-bold text-gray-600">
+                                        {page + 1} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={handleNextPage}
+                                        disabled={(page + 1) * pageSize >= totalCount}
+                                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-all"
+                                    >
+                                        다음
+                                    </button>
                                 </div>
                             )}
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
 
             {/* Detail Modal */}
             {selectedEval && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedEval(null)}>
+                <div
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    onClick={() => setSelectedEval(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="modal-title"
+                >
                     <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-2xl font-black text-gray-900">응답 상세</h3>
-                            <button onClick={() => setSelectedEval(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-all">
+                            <h3 id="modal-title" className="text-2xl font-black text-gray-900">응답 상세</h3>
+                            <button
+                                onClick={() => setSelectedEval(null)}
+                                className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+                                aria-label="닫기"
+                            >
                                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>

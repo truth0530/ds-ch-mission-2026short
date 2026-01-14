@@ -1,8 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { createSupabaseClient } from '@/lib/supabase';
-import { MISSIONARY_QUESTIONS, LEADER_QUESTIONS, TEAM_QUESTIONS, Question, TeamInfo, MISSION_TEAMS } from '@/lib/surveyData';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { User } from '@supabase/supabase-js';
+import { createSupabaseClient, SupabaseClient } from '@/lib/supabase';
+import { ENV_CONFIG, TABLES, STORAGE_KEYS } from '@/lib/constants';
+import { RoleType, ViewState, TeamInfo, Question, AuthState, QuestionsMap } from '@/types';
+import { SurveyFormData, SurveySubmissionPayload } from '@/types/survey';
+import { MISSIONARY_QUESTIONS, LEADER_QUESTIONS, TEAM_QUESTIONS, MISSION_TEAMS } from '@/lib/surveyData';
+import { removeDraft, markAsSubmitted } from '@/lib/storage';
 import LandingView from './LandingView';
 import RoleSelectionView from './RoleSelectionView';
 import TeamSelectionView from './TeamSelectionView';
@@ -11,96 +16,85 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../layout/Header';
 import Footer from '../layout/Footer';
 
-type ViewState = 'landing' | 'role_selection' | 'team_selection' | 'survey_form' | 'submitting' | 'success';
-
-const ENV = {
-    PROJECT_NAME: '2026mission_short',
-    PROJECT_ID: 'fjdorhdauvumfqhqujaj',
-    get SUPABASE_URL() {
-        return process.env.NEXT_PUBLIC_SUPABASE_URL || `https://${this.PROJECT_ID}.supabase.co`;
-    }
-};
-
 export default function SurveyContainer() {
+    // State
     const [view, setView] = useState<ViewState>('landing');
-    const [role, setRole] = useState<'선교사' | '인솔자' | '단기선교 팀원' | null>(null);
+    const [role, setRole] = useState<RoleType | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<TeamInfo | null>(null);
-    const [formData, setFormData] = useState<any>({});
-    const [auth, setAuth] = useState<{ user: any; isAdmin: boolean; loading: boolean }>({ user: null, isAdmin: false, loading: true });
-    const [sbClient, setSbClient] = useState<any>(null);
-    const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS); // Default to static
-    const [questions, setQuestions] = useState<{ missionary: Question[]; leader: Question[]; team_member: Question[] }>({
-        missionary: MISSIONARY_QUESTIONS,
-        leader: LEADER_QUESTIONS,
-        team_member: TEAM_QUESTIONS
+    const [formData, setFormData] = useState<Record<string, string | number | string[]>>({});
+    const [auth, setAuth] = useState<AuthState>({ user: null, isAdmin: false, loading: true });
+    const [sbClient, setSbClient] = useState<SupabaseClient | null>(null);
+    const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS);
+    const [questions, setQuestions] = useState<QuestionsMap>({
+        missionary: MISSIONARY_QUESTIONS as unknown as Question[],
+        leader: LEADER_QUESTIONS as unknown as Question[],
+        team_member: TEAM_QUESTIONS as unknown as Question[]
     });
     const [error, setError] = useState<string | null>(null);
+    const [existingSubmissionId, setExistingSubmissionId] = useState<string | null>(null);
+
+    // Refs for race condition prevention and unmount handling
+    const submitLockRef = useRef(false);
+    const isMountedRef = useRef(true);
 
     // Initialize Supabase & Auth
     useEffect(() => {
-        const url = ENV.SUPABASE_URL;
+        isMountedRef.current = true;
+
+        const url = ENV_CONFIG.SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
         if (key && key !== 'your_anon_key_here') {
             const client = createSupabaseClient(url, key);
+            if (!client) {
+                setAuth(prev => ({ ...prev, loading: false }));
+                return;
+            }
+
             setSbClient(client);
 
             // Load data
-            // loadQuestions(client); // Temporarily disabled to use updated static file for verification
             loadTeams(client);
 
             // Check Auth
-            client.auth.getSession().then(({ data: { session } }: any) => {
-                if (session?.user) checkUserStatus(client, session.user);
-                else setAuth(prev => ({ ...prev, loading: false }));
+            client.auth.getSession().then(({ data: { session } }) => {
+                if (!isMountedRef.current) return;
+                if (session?.user) {
+                    checkUserStatus(client, session.user);
+                } else {
+                    setAuth(prev => ({ ...prev, loading: false }));
+                }
             });
 
-            const { data: { subscription } } = client.auth.onAuthStateChange((_event: string, session: any) => {
-                if (session?.user) checkUserStatus(client, session.user);
-                else setAuth({ user: null, isAdmin: false, loading: false });
+            const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+                if (!isMountedRef.current) return;
+                if (session?.user) {
+                    checkUserStatus(client, session.user);
+                } else {
+                    setAuth({ user: null, isAdmin: false, loading: false });
+                }
             });
 
-            return () => subscription.unsubscribe();
+            return () => {
+                isMountedRef.current = false;
+                subscription.unsubscribe();
+            };
+        } else {
+            setAuth(prev => ({ ...prev, loading: false }));
         }
     }, []);
 
-    const loadQuestions = async (client: any) => {
-        try {
-            const { data } = await client
-                .from('survey_questions')
-                .select('*')
-                .eq('is_hidden', false)
-                .order('sort_order', { ascending: true });
-
-            if (data && data.length > 0) {
-                const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
-                data.forEach((q: any) => {
-                    const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
-                    if (q.role === 'common') qMap.common.push(mappedQ);
-                    else if (qMap[q.role]) qMap[q.role].push(mappedQ);
-                });
-                setQuestions({
-                    missionary: qMap.missionary.length > 0 ? qMap.missionary : MISSIONARY_QUESTIONS,
-                    leader: qMap.leader.length > 0 ? [...qMap.leader, ...qMap.common] : LEADER_QUESTIONS,
-                    team_member: qMap.team_member.length > 0 ? [...qMap.team_member, ...qMap.common] : TEAM_QUESTIONS
-                });
-            } else {
-                throw new Error('No questions found');
-            }
-        } catch (e) {
-            console.warn('Falling back to static questions', e);
-            setQuestions({ missionary: MISSIONARY_QUESTIONS, leader: LEADER_QUESTIONS, team_member: TEAM_QUESTIONS });
-        }
-    };
-
-    const loadTeams = async (client: any) => {
+    const loadTeams = async (client: SupabaseClient) => {
         try {
             const { data, error } = await client
-                .from('mission_teams')
+                .from(TABLES.TEAMS)
                 .select('*')
                 .order('country', { ascending: true });
 
-            if (data && data.length > 0) {
-                setTeams(data);
+            if (!isMountedRef.current) return;
+
+            if (data && data.length > 0 && !error) {
+                setTeams(data as TeamInfo[]);
             }
         } catch (e) {
             console.warn('Using static teams', e);
@@ -108,32 +102,45 @@ export default function SurveyContainer() {
     };
 
     // Check User Status (Admin + Existing Submission)
-    const checkUserStatus = async (client: any, user: any) => {
+    const checkUserStatus = async (client: SupabaseClient, user: User) => {
+        if (!isMountedRef.current) return;
+
         // 1. Check Admin
-        const { data: adminData } = await client.from('admin_users').select('email').eq('email', user.email).maybeSingle();
-        const isAdmin = !!adminData || user.email === 'truth0530@gmail.com';
+        const { data: adminData } = await client
+            .from(TABLES.ADMIN_USERS)
+            .select('email')
+            .eq('email', user.email)
+            .maybeSingle();
+
+        const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
+        const isAdmin = !!adminData || !!(fallbackEmail && user.email === fallbackEmail);
 
         // 2. Check Existing Submission
         const { data: submission } = await client
-            .from('mission_evaluations')
+            .from(TABLES.EVALUATIONS)
             .select('*')
             .eq('respondent_email', user.email)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
+        if (!isMountedRef.current) return;
+
         setAuth(prev => ({ ...prev, user, isAdmin, loading: false }));
 
         if (submission) {
+            // Store existing submission ID for update
+            setExistingSubmissionId(submission.id);
+
             // Load existing data
-            setFormData(submission.answers);
+            setFormData(submission.answers || {});
 
             // Restore Role
             if (['선교사', '인솔자', '단기선교 팀원'].includes(submission.role)) {
-                setRole(submission.role as any);
+                setRole(submission.role as RoleType);
             }
 
-            // Restore Team if exists (using missionary name as key mostly)
+            // Restore Team if exists
             if (submission.team_missionary && submission.team_missionary !== 'self') {
                 const foundTeam = teams.find(t => t.missionary === submission.team_missionary);
                 if (foundTeam) setSelectedTeam(foundTeam);
@@ -141,123 +148,133 @@ export default function SurveyContainer() {
         }
     };
 
-    const handleGoogleLogin = async () => {
+    const handleGoogleLogin = useCallback(async () => {
         if (!sbClient) return;
         await sbClient.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: window.location.origin }
         });
-    };
+    }, [sbClient]);
 
-    const handleLogout = async () => {
+    const handleLogout = useCallback(async () => {
         if (!sbClient) return;
         await sbClient.auth.signOut();
         setAuth({ user: null, isAdmin: false, loading: false });
         setFormData({});
         setRole(null);
         setSelectedTeam(null);
+        setExistingSubmissionId(null);
         setView('landing');
-    };
+    }, [sbClient]);
 
     // Navigation Handlers
-    const handleStart = () => {
-        // If user has data, go straight to form
+    const handleStart = useCallback(() => {
         if (auth.user && Object.keys(formData).length > 0 && role) {
             setView('survey_form');
         } else {
             setView('role_selection');
         }
-    };
+    }, [auth.user, formData, role]);
 
-    const handleRoleSelect = (selectedRole: '선교사' | '인솔자' | '단기선교 팀원') => {
+    const handleRoleSelect = useCallback((selectedRole: RoleType) => {
         setRole(selectedRole);
         if (selectedRole === '선교사' || selectedRole === '인솔자') {
             setView('survey_form');
         } else {
             setView('team_selection');
         }
-    };
+    }, []);
 
-    const handleTeamSelect = (team: TeamInfo) => {
+    const handleTeamSelect = useCallback((team: TeamInfo) => {
         setSelectedTeam(team);
         setView('survey_form');
-    };
+    }, []);
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
         if (view === 'role_selection') setView('landing');
         else if (view === 'team_selection') setView('role_selection');
         else if (view === 'survey_form') {
             if (role === '선교사' || role === '인솔자') setView('role_selection');
             else setView('team_selection');
         }
-    };
+    }, [view, role]);
 
-    const handleSubmit = async (data: any) => {
-        if (!role) return;
+    const handleSubmit = useCallback(async (data: SurveyFormData) => {
+        if (!role || !sbClient) return;
 
-        // Validation check (already done in form view)
-
-        // Duplicate check (Client-side simple check) - Skipping for logged in users to allow edit
-        const storageKey = `survey_submitted_${role}_${selectedTeam?.missionary || 'general'}`;
-        if (!auth.user && sessionStorage.getItem(storageKey) === 'true') {
-            // alert('이미 제출하신 설문입니다.'); // Disable strictly blocking for now, let server handle or allow re-submit
+        // Race condition prevention: Double check with lock
+        if (submitLockRef.current) {
+            console.warn('Submission already in progress');
+            return;
         }
+        submitLockRef.current = true;
+
+        // Store previous state for recovery
+        const previousView = view;
+        const previousFormData = { ...formData };
 
         setView('submitting');
+        setError(null);
 
         try {
-            const payload = {
+            const payload: SurveySubmissionPayload = {
                 role,
                 team_missionary: selectedTeam?.missionary || null,
                 team_dept: selectedTeam?.dept || null,
                 team_country: selectedTeam?.country || null,
                 team_leader: selectedTeam?.leader || null,
-                respondent_name: data.respondent_name || (auth.user ? auth.user.user_metadata.full_name : 'Anonymous'),
-                respondent_email: data.respondent_email || (auth.user ? auth.user.email : ''),
+                respondent_name: data.respondent_name || (auth.user?.user_metadata?.full_name as string) || 'Anonymous',
+                respondent_email: data.respondent_email || auth.user?.email || '',
                 answers: data.answers
             };
 
-            // Upsert if logged in (update existing), Insert if anonymous
             let result;
-            if (auth.user) {
-                // Try to find existing first to update? Or just Insert?
-                // RLS policies usually handle "Can Insert". 
-                // If we want "Edit", we might need to know the ID or use Upsert on unique constraint.
-                // For now, let's just INSERT. Later we can refining to UPDATE if ID exists.
-                // Actually, user wants "Edit". So we should Update if match found.
-                // But without unique ID on frontend, simple Insert is safer.
-                // Let's stick to Insert for now, but effectively it acts as a new version.
-                // TODO: To support true 'Edit', we need to fetch ID and use .update().
-                // Let's check if we fetched an ID in checkUserStatus.
 
-                // However, simplified approach: Just Insert new row.
-                result = await sbClient.from('mission_evaluations').insert([payload]);
+            // If logged in user has existing submission, update it
+            if (auth.user && existingSubmissionId) {
+                result = await sbClient
+                    .from(TABLES.EVALUATIONS)
+                    .update(payload)
+                    .eq('id', existingSubmissionId);
             } else {
-                result = await sbClient.from('mission_evaluations').insert([payload]);
+                // Insert new submission
+                result = await sbClient
+                    .from(TABLES.EVALUATIONS)
+                    .insert([payload]);
             }
 
             if (result.error) throw result.error;
 
-            sessionStorage.setItem(storageKey, 'true');
-            // Clear draft
-            const draftKey = `survey_draft_${role}_${selectedTeam?.missionary || 'general'}`;
-            localStorage.removeItem(draftKey);
+            // Success: Clear storage and mark as submitted
+            if (role && selectedTeam?.missionary) {
+                removeDraft(role, selectedTeam.missionary);
+                markAsSubmitted(role, selectedTeam.missionary);
+            }
 
-            setView('success');
-        } catch (e: any) {
-            console.error(e);
-            setError('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
-            setView('survey_form');
+            if (isMountedRef.current) {
+                setView('success');
+            }
+        } catch (e: unknown) {
+            console.error('Submission error:', e);
+
+            if (isMountedRef.current) {
+                // Recover previous state
+                setView(previousView);
+                setFormData(previousFormData);
+                setError('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
+            }
+        } finally {
+            submitLockRef.current = false;
         }
-    };
+    }, [role, sbClient, selectedTeam, auth.user, existingSubmissionId, view, formData]);
 
     // Helper to get questions for current role
-    const getCurrentQuestions = () => {
+    const getCurrentQuestions = useCallback((): Question[] => {
         if (role === '선교사') return questions.missionary;
         if (role === '인솔자') return questions.leader;
         if (role === '단기선교 팀원') return questions.team_member;
         return [];
-    };
+    }, [role, questions]);
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-700 flex flex-col">
@@ -331,13 +348,14 @@ export default function SurveyContainer() {
                 </AnimatePresence>
             </main>
 
-            {/* <Footer /> is now always visible */}
             <Footer />
 
             {error && (
-                <div className="fixed bottom-4 left-4 right-4 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl shadow-lg flex justify-between items-center z-50 animate-bounce">
+                <div className="fixed bottom-4 left-4 right-4 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl shadow-lg flex justify-between items-center z-50">
                     <span>{error}</span>
-                    <button onClick={() => setError(null)} className="font-bold ml-4">✕</button>
+                    <button onClick={() => setError(null)} className="font-bold ml-4 text-red-500 hover:text-red-700">
+                        X
+                    </button>
                 </div>
             )}
         </div>

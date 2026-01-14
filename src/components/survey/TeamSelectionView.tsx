@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { TeamInfo } from '@/lib/surveyData';
+import { TeamInfo } from '@/types';
 
 interface TeamSelectionViewProps {
     teams: TeamInfo[];
@@ -11,35 +13,33 @@ interface TeamSelectionViewProps {
 export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelectionViewProps) {
     const [searchTerm, setSearchTerm] = useState('');
 
-    const filteredTeams = teams.filter(t =>
-        t.missionary.includes(searchTerm) ||
-        t.country.includes(searchTerm) ||
-        t.leader.includes(searchTerm) ||
-        t.dept.includes(searchTerm)
-    );
+    // Memoized filtering and sorting for performance optimization
+    const sortedTeams = useMemo(() => {
+        const filtered = teams.filter(t =>
+            t.missionary.includes(searchTerm) ||
+            t.country.includes(searchTerm) ||
+            t.leader.includes(searchTerm) ||
+            t.dept.includes(searchTerm)
+        );
 
-    const sortedTeams = [...filteredTeams].sort((a, b) => {
-        // 1. Dept grouping (Korean sort)
-        if (a.dept !== b.dept) {
-            return a.dept.localeCompare(b.dept, 'ko');
-        }
-
-        // 2. Date sort (Ascending)
-        const getStartScore = (period: string) => {
-            try {
-                // "1/31-8" -> "1/31"
-                const start = period.split('-')[0].trim();
-                const [m, d] = start.split('/').map(Number);
-                return (m * 100) + d;
-            } catch {
-                return 9999;
+        return [...filtered].sort((a, b) => {
+            // 1. Dept grouping (Korean sort)
+            if (a.dept !== b.dept) {
+                return a.dept.localeCompare(b.dept, 'ko');
             }
-        };
 
-        return getStartScore(a.period) - getStartScore(b.period);
-    });
+            // 2. Date sort (Ascending) - Pre-computed once
+            const getStartScore = (period: string): number => {
+                const match = period.match(/^(\d+)\/(\d+)/);
+                if (!match) return 9999;
+                return parseInt(match[1], 10) * 100 + parseInt(match[2], 10);
+            };
 
-    const getBadgeColor = (dept: string) => {
+            return getStartScore(a.period) - getStartScore(b.period);
+        });
+    }, [teams, searchTerm]);
+
+    const getBadgeColor = (dept: string): string => {
         if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
         if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
         if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -86,7 +86,7 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
                     ) : (
                         sortedTeams.map((team, idx) => (
                             <button
-                                key={`${team.missionary}-${idx}`}
+                                key={team.id || `${team.missionary}-${idx}`}
                                 onClick={() => onSelect(team)}
                                 className="w-full p-5 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-500 hover:shadow-md transition-all text-left group"
                             >

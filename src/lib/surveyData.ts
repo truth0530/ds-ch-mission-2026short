@@ -1,12 +1,11 @@
-export interface TeamInfo {
-    id?: string;
-    dept: string;
-    leader: string;
-    country: string;
-    missionary: string;
-    period: string;
-    members: string;
-    content: string;
+import { TeamInfo, Question as BaseQuestion, RoleKey } from '@/types';
+
+// Re-export for backwards compatibility
+export type { TeamInfo };
+
+// Local Question type that extends base with string role for static data
+export interface Question extends Omit<BaseQuestion, 'role'> {
+    role?: RoleKey | string;
 }
 
 export const MISSION_TEAMS: TeamInfo[] = [
@@ -23,17 +22,6 @@ export const MISSION_TEAMS: TeamInfo[] = [
     { dept: '오픈 모집팀', leader: '이병철 집사', country: '태국', missionary: '지은재 선교사', period: '1/28-2/3', members: '6명', content: '4부예배 중보기도팀 기도사역' },
     { dept: '오픈 모집팀', leader: '이인호 목사', country: '베트남', missionary: '박종은 선교사', period: '4/3-7', members: '13명', content: '가정 단기선교 (어린이, 노방, 예배사역)' }
 ];
-
-export interface Question {
-    id: string;
-    type: 'scale' | 'text' | 'multi_select';
-    text: string;
-    options?: string[];
-    is_hidden?: boolean;
-    sort_order?: number;
-    role?: string;
-    question_text?: string;
-}
 
 export const COMMON_SHARED_QUESTIONS: Question[] = [
     {
