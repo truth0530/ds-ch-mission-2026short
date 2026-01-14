@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { getSbClient, SupabaseClient } from '@/lib/supabase';
 import { ENV_CONFIG, TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
-import { validateEvaluations } from '@/lib/validators';
+import { validateEvaluations, sanitizeInput } from '@/lib/validators';
 import { MISSION_TEAMS } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
 
@@ -70,7 +70,9 @@ export default function AdminDashboard() {
 
         const client = getSbClient();
         if (!client) {
-            console.error('Supabase client not initialized. Check environment variables.');
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Supabase client not initialized. Check environment variables.');
+            }
             setAuthLoading(false);
             return;
         }
@@ -89,7 +91,9 @@ export default function AdminDashboard() {
             })
             .catch((error) => {
                 if (!isMounted) return;
-                console.error('Failed to get session:', error);
+                if (process.env.NODE_ENV === 'development') {
+                    console.error('Failed to get session:', error);
+                }
                 setAuthLoading(false);
             });
 
@@ -133,20 +137,40 @@ export default function AdminDashboard() {
 
     const handleLogin = async () => {
         const client = getSbClient();
-        if (!client) return;
-        await client.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin + '/admin/dashboard'
+        if (!client) {
+            showToast('인증 서비스에 연결할 수 없습니다.', 'error');
+            return;
+        }
+        try {
+            const { error } = await client.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin + '/admin/dashboard'
+                }
+            });
+            if (error) {
+                showToast('로그인 중 오류가 발생했습니다: ' + error.message, 'error');
             }
-        });
+        } catch (e) {
+            showToast('로그인 중 오류가 발생했습니다. 다시 시도해 주세요.', 'error');
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Login error:', e);
+            }
+        }
     };
 
     const handleLogout = async () => {
         const client = getSbClient();
         if (!client) return;
-        await client.auth.signOut();
-        window.location.reload();
+        try {
+            await client.auth.signOut();
+        } catch (e) {
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Logout error:', e);
+            }
+        } finally {
+            window.location.reload();
+        }
     };
 
     // Fetch Data with Promise.all for better performance
@@ -668,9 +692,9 @@ export default function AdminDashboard() {
                                 <h4 className="text-lg font-black text-gray-900">응답 내용</h4>
                                 {Object.entries(selectedEval.answers || {}).map(([key, value]) => (
                                     <div key={key} className="p-4 bg-gray-50 rounded-xl">
-                                        <div className="text-xs font-black text-blue-600 uppercase tracking-widest mb-2">질문 ID: {key}</div>
+                                        <div className="text-xs font-black text-blue-600 uppercase tracking-widest mb-2">질문 ID: {sanitizeInput(key)}</div>
                                         <div className="font-bold text-gray-900">
-                                            {Array.isArray(value) ? value.join(', ') : String(value)}
+                                            {Array.isArray(value) ? value.map(v => sanitizeInput(String(v))).join(', ') : sanitizeInput(String(value))}
                                         </div>
                                     </div>
                                 ))}

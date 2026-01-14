@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { TeamInfo } from '@/types';
+import { getBadgeColor, sortTeamsByDeptAndDate } from '@/lib/utils';
 
 interface TeamSelectionViewProps {
     teams: TeamInfo[];
@@ -22,31 +23,8 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
             t.dept.includes(searchTerm)
         );
 
-        return [...filtered].sort((a, b) => {
-            // 1. Dept grouping (Korean sort)
-            if (a.dept !== b.dept) {
-                return a.dept.localeCompare(b.dept, 'ko');
-            }
-
-            // 2. Date sort (Ascending) - Pre-computed once
-            const getStartScore = (period: string): number => {
-                const match = period.match(/^(\d+)\/(\d+)/);
-                if (!match) return 9999;
-                return parseInt(match[1], 10) * 100 + parseInt(match[2], 10);
-            };
-
-            return getStartScore(a.period) - getStartScore(b.period);
-        });
+        return sortTeamsByDeptAndDate(filtered);
     }, [teams, searchTerm]);
-
-    const getBadgeColor = (dept: string): string => {
-        if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
-        if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
-        if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-        if (dept.includes('오픈')) return 'bg-amber-100 text-amber-700 border-amber-200';
-        if (dept.includes('글로벌')) return 'bg-violet-100 text-violet-700 border-violet-200';
-        return 'bg-slate-100 text-slate-600 border-slate-200';
-    };
 
     return (
         <motion.div
@@ -58,21 +36,23 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
             <div className="sticky top-0 bg-slate-50/80 backdrop-blur-md z-10 px-6 pt-6 pb-4 border-b border-slate-200/50">
                 <div className="max-w-md mx-auto">
                     <div className="relative flex items-center justify-center mb-4">
-                        <button onClick={onBack} className="absolute left-0 p-2 -ml-2 text-slate-400 hover:text-slate-600">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        <button onClick={onBack} className="absolute left-0 p-2 -ml-2 text-slate-400 hover:text-slate-600" aria-label="뒤로 가기">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <h2 className="text-lg font-bold text-slate-800">사역팀 선택</h2>
                     </div>
 
                     <div className="relative">
+                        <label htmlFor="team-search" className="sr-only">선교사님 이름 또는 국가 검색</label>
                         <input
+                            id="team-search"
                             type="text"
                             placeholder="선교사님 이름 또는 국가 검색..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
                         />
-                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
                 </div>
             </div>
@@ -89,6 +69,7 @@ export default function TeamSelectionView({ teams, onSelect, onBack }: TeamSelec
                                 key={team.id || `${team.missionary}-${idx}`}
                                 onClick={() => onSelect(team)}
                                 className="w-full p-5 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-500 hover:shadow-md transition-all text-left group"
+                                aria-label={`${team.country} - ${team.missionary} 선교사님 팀 선택`}
                             >
                                 <div className="flex items-center gap-4">
                                     {/* Left: Country Circle */}

@@ -2,19 +2,29 @@
 
 import React, { useEffect, useState } from 'react';
 import { MISSIONARY_QUESTIONS, LEADER_QUESTIONS, TEAM_QUESTIONS, Question } from '@/lib/surveyData';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { QuestionType, QuestionsMap } from '@/types';
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Lazy client initialization to prevent build-time crashes
-let sbClientInstance: any = null;
-const getSbClient = () => {
+let sbClientInstance: SupabaseClient | null = null;
+const getSbClient = (): SupabaseClient | null => {
     if (!sbClientInstance && SB_URL && SB_KEY) {
         sbClientInstance = createClient(SB_URL, SB_KEY);
     }
     return sbClientInstance;
 };
+
+// DB에서 가져온 질문 데이터 타입
+interface DbQuestion {
+    id: string;
+    type: string;
+    question_text: string;
+    options?: string[];
+    role: string;
+}
 
 const QuestionPreview = ({ question }: { question: Question }) => {
     return (
@@ -76,11 +86,11 @@ export default function PreviewPage() {
                     .order('sort_order', { ascending: true });
 
                 if (!error && data && data.length > 0) {
-                    const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
-                    data.forEach((q: any) => {
-                        const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
+                    const qMap: QuestionsMap & { common: Question[] } = { missionary: [], leader: [], team_member: [], common: [] };
+                    data.forEach((q: DbQuestion) => {
+                        const mappedQ: Question = { id: q.id, type: q.type as QuestionType, text: q.question_text, options: q.options };
                         if (q.role === 'common') qMap.common.push(mappedQ);
-                        else if (qMap[q.role]) qMap[q.role].push(mappedQ);
+                        else if (q.role in qMap) (qMap[q.role as keyof QuestionsMap] as Question[]).push(mappedQ);
                     });
                     setQuestions({
                         missionary: qMap.missionary.length > 0 ? qMap.missionary : MISSIONARY_QUESTIONS,

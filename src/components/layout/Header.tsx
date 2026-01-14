@@ -1,16 +1,42 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { User } from '@supabase/supabase-js';
 
 interface HeaderProps {
     onContactClick?: () => void;
-    user?: any;
+    user?: User | null;
     onLogout?: () => void;
     isAdmin?: boolean;
 }
 
+// URL 검증 함수
+const getSafeAvatarUrl = (user: User): string => {
+    const avatarUrl = user.user_metadata?.avatar_url;
+
+    // avatar_url이 유효한 https URL인지 검증
+    if (avatarUrl && typeof avatarUrl === 'string') {
+        try {
+            const url = new URL(avatarUrl);
+            // 허용된 도메인만 허용 (Google, GitHub 등)
+            const allowedHosts = ['lh3.googleusercontent.com', 'avatars.githubusercontent.com', 'ui-avatars.com'];
+            if (url.protocol === 'https:' && allowedHosts.some(host => url.hostname.endsWith(host))) {
+                return avatarUrl;
+            }
+        } catch {
+            // URL 파싱 실패 시 기본 아바타 사용
+        }
+    }
+
+    // 기본 아바타 (이메일 기반)
+    const email = user.email || 'user';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}&background=random`;
+};
+
 export default function Header({ onContactClick, user, onLogout, isAdmin }: HeaderProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    const avatarUrl = useMemo(() => user ? getSafeAvatarUrl(user) : '', [user]);
 
     return (
         <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-slate-200">
@@ -38,7 +64,7 @@ export default function Header({ onContactClick, user, onLogout, isAdmin }: Head
                                     className="flex items-center gap-2 focus:outline-none transition-transform active:scale-95"
                                 >
                                     <img
-                                        src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}`}
+                                        src={avatarUrl}
                                         alt="Profile"
                                         className={`w-8 h-8 rounded-full border shadow-sm transition-all ${isMenuOpen ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-indigo-100 hover:border-indigo-300'}`}
                                     />

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getSbClient } from '@/lib/supabase';
 import { INITIAL_QUESTIONS, Question, MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
+import { QuestionType } from '@/types';
 import { ENV_CONFIG, TABLES } from '@/lib/constants';
 import { isValidEmail, generateId } from '@/lib/validators';
 import { User } from '@supabase/supabase-js';
@@ -247,71 +248,94 @@ export default function AdminQuestionsPage() {
 
     const handleSaveQuestion = async (id: string) => {
         const client = getSbClient();
-        if (!client) return;
-        const { error } = await client
-            .from(TABLES.QUESTIONS)
-            .update(editForm)
-            .eq('id', id);
+        if (!client) {
+            showNotification('서비스에 연결할 수 없습니다.', 'error');
+            return;
+        }
+        try {
+            const { error } = await client
+                .from(TABLES.QUESTIONS)
+                .update(editForm)
+                .eq('id', id);
 
-        if (error) showNotification('저장 실패: ' + error.message, 'error');
-        else {
-            setEditingId(null);
-            fetchQuestions();
-            showNotification('문항이 수정되었습니다.', 'success');
+            if (error) {
+                showNotification('저장 실패: ' + error.message, 'error');
+            } else {
+                setEditingId(null);
+                fetchQuestions();
+                showNotification('문항이 수정되었습니다.', 'success');
+            }
+        } catch (e) {
+            showNotification('저장 중 오류가 발생했습니다.', 'error');
+            console.error('Save question error:', e);
         }
     };
 
     const handleToggleHidden = async (q: Question) => {
         const client = getSbClient();
         if (!client) return;
-        const { error } = await client
-            .from(TABLES.QUESTIONS)
-            .update({ is_hidden: !q.is_hidden })
-            .eq('id', q.id);
-        if (!error) fetchQuestions();
+        try {
+            const { error } = await client
+                .from(TABLES.QUESTIONS)
+                .update({ is_hidden: !q.is_hidden })
+                .eq('id', q.id);
+            if (!error) fetchQuestions();
+        } catch (e) {
+            console.error('Toggle hidden error:', e);
+        }
     };
 
     const handleAddQuestion = async () => {
         const client = getSbClient();
-        if (!client) return;
-        const newId = generateId('q');
-        const { error } = await client
-            .from(TABLES.QUESTIONS)
-            .insert([{
-                id: newId,
-                role: 'common',
-                type: 'text',
-                question_text: '새로운 문항을 입력하세요',
-                sort_order: (questions.length > 0 ? Math.max(...questions.map(q => q.sort_order || 0)) : 0) + 10,
-                is_hidden: false
-            }]);
-        if (!error) {
-            setEditingId(newId);
-            setEditForm({ question_text: '새로운 문항을 입력하세요', role: 'common', type: 'text' });
-            fetchQuestions();
-            showNotification('새 문항이 추가되었습니다.', 'success');
-        } else {
-            showNotification('추가 실패: ' + error.message, 'error');
+        if (!client) {
+            showNotification('서비스에 연결할 수 없습니다.', 'error');
+            return;
+        }
+        try {
+            const newId = generateId('q');
+            const { error } = await client
+                .from(TABLES.QUESTIONS)
+                .insert([{
+                    id: newId,
+                    role: 'common',
+                    type: 'text',
+                    question_text: '새로운 문항을 입력하세요',
+                    sort_order: (questions.length > 0 ? Math.max(...questions.map(q => q.sort_order || 0)) : 0) + 10,
+                    is_hidden: false
+                }]);
+            if (!error) {
+                setEditingId(newId);
+                setEditForm({ question_text: '새로운 문항을 입력하세요', role: 'common', type: 'text' });
+                fetchQuestions();
+                showNotification('새 문항이 추가되었습니다.', 'success');
+            } else {
+                showNotification('추가 실패: ' + error.message, 'error');
+            }
+        } catch (e) {
+            showNotification('문항 추가 중 오류가 발생했습니다.', 'error');
+            console.error('Add question error:', e);
         }
     };
 
     const handleDeleteQuestion = async (id: string) => {
-        // Use confirmModal instead of window.confirm for consistency? 
-        // For now, let's just make sure we don't use alert on error.
-        // Actually, let's keep native confirm for delete for speed, unless user complained about that too.
-        // User specifically complained about "Initial Load" flickering.
-        // Let's replace ONLY error alerts with notifications for now to be safe and fast.
-
         if (!confirm('문항을 삭제하시겠습니까?')) return;
 
         const client = getSbClient();
-        if (!client) return;
-        const { error } = await client.from(TABLES.QUESTIONS).delete().eq('id', id);
-        if (!error) {
-            fetchQuestions();
-            showNotification('문항이 삭제되었습니다.', 'success');
-        } else {
-            showNotification('삭제 실패: ' + error.message, 'error');
+        if (!client) {
+            showNotification('서비스에 연결할 수 없습니다.', 'error');
+            return;
+        }
+        try {
+            const { error } = await client.from(TABLES.QUESTIONS).delete().eq('id', id);
+            if (!error) {
+                fetchQuestions();
+                showNotification('문항이 삭제되었습니다.', 'success');
+            } else {
+                showNotification('삭제 실패: ' + error.message, 'error');
+            }
+        } catch (e) {
+            showNotification('삭제 중 오류가 발생했습니다.', 'error');
+            console.error('Delete question error:', e);
         }
     };
 
@@ -571,7 +595,7 @@ export default function AdminQuestionsPage() {
                                                                         <option value="team_member">Team</option>
                                                                         <option value="common">Common</option>
                                                                     </select>
-                                                                    <select value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value as any })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 transition-all">
+                                                                    <select value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value as QuestionType })} className="bg-gray-50 border-none rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 transition-all">
                                                                         <option value="scale">Scale</option>
                                                                         <option value="text">Text</option>
                                                                         <option value="multi_select">Multi-Select</option>

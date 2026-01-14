@@ -57,21 +57,27 @@ export function loadDraft(role: string, missionary: string): SurveyDraft | null 
 
     // Validate structure
     if (!isValidDraft(parsed)) {
-      console.warn('[Storage] Invalid draft format, removing');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Storage] Invalid draft format, removing');
+      }
       localStorage.removeItem(key);
       return null;
     }
 
     // Check expiration
     if (isDraftExpired(parsed.savedAt)) {
-      console.info('[Storage] Draft expired, removing');
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[Storage] Draft expired, removing');
+      }
       localStorage.removeItem(key);
       return null;
     }
 
     return parsed;
   } catch (error) {
-    console.error('[Storage] Failed to load draft:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Storage] Failed to load draft:', error);
+    }
     localStorage.removeItem(key);
     return null;
   }
@@ -96,7 +102,9 @@ export function saveDraft(role: string, missionary: string, draft: Omit<SurveyDr
     localStorage.setItem(key, JSON.stringify(dataToSave));
     return true;
   } catch (error) {
-    console.error('[Storage] Failed to save draft:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Storage] Failed to save draft:', error);
+    }
     return false;
   }
 }
@@ -113,7 +121,9 @@ export function removeDraft(role: string, missionary: string): boolean {
     localStorage.removeItem(key);
     return true;
   } catch (error) {
-    console.error('[Storage] Failed to remove draft:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Storage] Failed to remove draft:', error);
+    }
     return false;
   }
 }
@@ -145,7 +155,9 @@ export function markAsSubmitted(role: string, missionary: string): boolean {
     sessionStorage.setItem(key, 'true');
     return true;
   } catch (error) {
-    console.error('[Storage] Failed to mark as submitted:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Storage] Failed to mark as submitted:', error);
+    }
     return false;
   }
 }
@@ -177,7 +189,9 @@ export function clearAllSurveyData(): void {
     }
     sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
   } catch (error) {
-    console.error('[Storage] Failed to clear survey data:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Storage] Failed to clear survey data:', error);
+    }
   }
 }
 

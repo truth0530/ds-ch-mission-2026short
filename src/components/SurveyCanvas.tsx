@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { User } from '@supabase/supabase-js';
 import { createSupabaseClient, SupabaseClient } from '@/lib/supabase';
 import { ENV_CONFIG, TABLES } from '@/lib/constants';
 
@@ -13,6 +14,16 @@ import {
     TeamInfo,
     MISSION_TEAMS
 } from '@/lib/surveyData';
+
+// Type definitions for Canvas state
+type RoleType = '선교사' | '인솔자' | '단기선교 팀원';
+type FormDataType = Record<string, string | number | string[]>;
+interface QuestionsMap {
+    missionary: Question[];
+    leader: Question[];
+    team_member: Question[];
+    common?: Question[];
+}
 
 const layout = {
     padding: 24,
@@ -44,13 +55,13 @@ export default function SurveyCanvas() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const hiddenInputRef = useRef<HTMLTextAreaElement>(null);
     const [isInitialized, setIsInitialized] = useState(false);
-    const [sbClient, setSbClient] = useState<any>(null);
+    const [sbClient, setSbClient] = useState<SupabaseClient | null>(null);
 
     const [state, setState] = useState({
         view: 'landing',
-        role: null as '선교사' | '인솔자' | '단기선교 팀원' | null,
+        role: null as RoleType | null,
         selectedTeam: null as TeamInfo | null,
-        formData: {} as any,
+        formData: {} as FormDataType,
         focus: null as string | null,
         mouse: { x: 0, y: 0, down: false },
         scroll: 0,
@@ -63,7 +74,7 @@ export default function SurveyCanvas() {
             team_member: [] as Question[]
         },
         auth: {
-            user: null as any,
+            user: null as User | null,
             isAdmin: false,
             loading: true
         },
@@ -78,7 +89,7 @@ export default function SurveyCanvas() {
     const stateRef = useRef(state);
     useEffect(() => { stateRef.current = state; }, [state]);
 
-    const loadQuestions = async (client: any) => {
+    const loadQuestions = async (client: SupabaseClient) => {
         try {
             const { data, error } = await client
                 .from('survey_questions')
@@ -87,18 +98,18 @@ export default function SurveyCanvas() {
                 .order('sort_order', { ascending: true });
 
             if (data && data.length > 0) {
-                const qMap: any = { missionary: [], leader: [], team_member: [], common: [] };
-                data.forEach((q: any) => {
-                    const mappedQ: Question = { id: q.id, type: q.type as any, text: q.question_text, options: q.options };
-                    if (q.role === 'common') qMap.common.push(mappedQ);
-                    else if (qMap[q.role]) qMap[q.role].push(mappedQ);
+                const qMap: QuestionsMap = { missionary: [], leader: [], team_member: [], common: [] };
+                data.forEach((q: { id: string; type: string; question_text: string; options?: string[]; role: string }) => {
+                    const mappedQ: Question = { id: q.id, type: q.type as Question['type'], text: q.question_text, options: q.options };
+                    if (q.role === 'common') qMap.common?.push(mappedQ);
+                    else if (q.role in qMap) (qMap[q.role as keyof QuestionsMap] as Question[]).push(mappedQ);
                 });
                 setState(prev => ({
                     ...prev,
                     questions: {
                         missionary: qMap.missionary.length > 0 ? qMap.missionary : MISSIONARY_QUESTIONS,
-                        leader: qMap.leader.length > 0 ? [...qMap.leader, ...qMap.common] : LEADER_QUESTIONS,
-                        team_member: qMap.team_member.length > 0 ? [...qMap.team_member, ...qMap.common] : TEAM_QUESTIONS
+                        leader: qMap.leader.length > 0 ? [...qMap.leader, ...(qMap.common || [])] : LEADER_QUESTIONS,
+                        team_member: qMap.team_member.length > 0 ? [...qMap.team_member, ...(qMap.common || [])] : TEAM_QUESTIONS
                     }
                 }));
             } else {
@@ -118,7 +129,7 @@ export default function SurveyCanvas() {
     };
 
     // ===== VALIDATION FUNCTIONS =====
-    const validateFormData = (questions: Question[], formData: any): string[] => {
+    const validateFormData = (questions: Question[], formData: FormDataType): string[] => {
         const errors: string[] = [];
         questions.forEach(q => {
             const answer = formData[q.id];
@@ -207,7 +218,7 @@ export default function SurveyCanvas() {
                     if (session?.user) await checkAdmin(client, session.user);
                     else setState(prev => ({ ...prev, auth: { ...prev.auth, loading: false } }));
 
-                    client.auth.onAuthStateChange(async (_event: string, session: any) => {
+                    client.auth.onAuthStateChange(async (_event, session) => {
                         if (session?.user) await checkAdmin(client, session.user);
                         else setState(prev => ({ ...prev, auth: { user: null, isAdmin: false, loading: false } }));
                     });
@@ -220,7 +231,7 @@ export default function SurveyCanvas() {
         }
     }, []);
 
-    const checkAdmin = async (client: SupabaseClient, user: any) => {
+    const checkAdmin = async (client: SupabaseClient, user: User) => {
         const { data } = await client.from(TABLES.ADMIN_USERS).select('email').eq('email', user.email).single();
         const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
         setState(prev => ({
@@ -561,7 +572,8 @@ export default function SurveyCanvas() {
             } else if (q.type === 'multi_select') {
                 const options = q.options || [];
                 options.forEach((opt, oi) => {
-                    const isSelected = (formData[q.id] || []).includes(opt);
+                    const selectedValues = formData[q.id];
+                    const isSelected = Array.isArray(selectedValues) && selectedValues.includes(opt);
                     const optY = currentY + oi * 44;
                     const optH = 36;
                     const hover = isInside(mouse.x, mouse.y + scroll, layout.padding, optY, width - layout.padding * 2, optH);
@@ -608,7 +620,8 @@ export default function SurveyCanvas() {
 
                 ctx.fillStyle = formData[q.id] ? layout.colors.text : layout.colors.subtext;
                 ctx.font = '14px Pretendard';
-                const txt = formData[q.id] || '답변을 자유롭게 작성해주세요...';
+                const rawTxt = formData[q.id];
+                const txt = (typeof rawTxt === 'string' ? rawTxt : '') || '답변을 자유롭게 작성해주세요...';
                 const txtLines = wrapText(ctx, txt, width - layout.padding * 2 - 30);
                 txtLines.forEach((tl, tli) => {
                     if (tli < 4) ctx.fillText(tl, layout.padding + 16, currentY + 30 + tli * 20);
@@ -817,16 +830,15 @@ export default function SurveyCanvas() {
         }
 
         if (view === 'role_selection') {
-            const roles = ['선교사', '인솔자', '단기선교 팀원'];
+            const roles: RoleType[] = ['선교사', '인솔자', '단기선교 팀원'];
             const startY = 180;
             const btnH = 60;
             roles.forEach((r, i) => {
                 const y = startY + (btnH + 20) * i;
                 if (isInside(mx, my, layout.padding, y, width - layout.padding * 2, btnH)) {
-                    const newRole = r as any;
                     setState(prev => ({
                         ...prev,
-                        role: newRole,
+                        role: r,
                         view: 'team_selection',
                         scroll: 0,
                         formData: {},
@@ -922,7 +934,8 @@ export default function SurveyCanvas() {
                         options.forEach((opt, oi) => {
                             const optY = currentY + oi * 35;
                             if (isInside(mx, realY, layout.padding, optY, width - layout.padding * 2, 30)) {
-                                const currentVals = formData[q.id] || [];
+                                const rawVals = formData[q.id];
+                                const currentVals = Array.isArray(rawVals) ? rawVals : [];
                                 const nextVals = currentVals.includes(opt)
                                     ? currentVals.filter((v: string) => v !== opt)
                                     : [...currentVals, opt];
@@ -935,7 +948,8 @@ export default function SurveyCanvas() {
                             if (stateRef.current.focus !== q.id) {
                                 setState(prev => ({ ...prev, focus: q.id }));
                                 if (hiddenInputRef.current) {
-                                    hiddenInputRef.current.value = formData[q.id] || '';
+                                    const rawVal = formData[q.id];
+                                    hiddenInputRef.current.value = typeof rawVal === 'string' ? rawVal : '';
                                     hiddenInputRef.current.focus();
                                 }
                             } else {
@@ -1009,6 +1023,14 @@ export default function SurveyCanvas() {
             setTimeout(() => {
                 setState(prev => ({ ...prev, error: null }));
             }, 3000);
+            return;
+        }
+
+        if (!sbClient) {
+            setState(prev => ({
+                ...prev,
+                error: '서비스에 연결할 수 없습니다. 페이지를 새로고침해 주세요.'
+            }));
             return;
         }
 

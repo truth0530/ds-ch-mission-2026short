@@ -57,14 +57,22 @@ export default function SurveyContainer() {
             loadTeams(client);
 
             // Check Auth
-            client.auth.getSession().then(({ data: { session } }) => {
-                if (!isMountedRef.current) return;
-                if (session?.user) {
-                    checkUserStatus(client, session.user);
-                } else {
+            client.auth.getSession()
+                .then(({ data: { session } }) => {
+                    if (!isMountedRef.current) return;
+                    if (session?.user) {
+                        checkUserStatus(client, session.user);
+                    } else {
+                        setAuth(prev => ({ ...prev, loading: false }));
+                    }
+                })
+                .catch((error) => {
+                    if (!isMountedRef.current) return;
+                    if (process.env.NODE_ENV === 'development') {
+                        console.error('Session check error:', error);
+                    }
                     setAuth(prev => ({ ...prev, loading: false }));
-                }
-            });
+                });
 
             const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
                 if (!isMountedRef.current) return;
@@ -97,7 +105,9 @@ export default function SurveyContainer() {
                 setTeams(data as TeamInfo[]);
             }
         } catch (e) {
-            console.warn('Using static teams', e);
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Using static teams', e);
+            }
         }
     };
 
@@ -105,66 +115,108 @@ export default function SurveyContainer() {
     const checkUserStatus = async (client: SupabaseClient, user: User) => {
         if (!isMountedRef.current) return;
 
-        // 1. Check Admin
-        const { data: adminData } = await client
-            .from(TABLES.ADMIN_USERS)
-            .select('email')
-            .eq('email', user.email)
-            .maybeSingle();
+        try {
+            // 1. Check Admin
+            const { data: adminData, error: adminError } = await client
+                .from(TABLES.ADMIN_USERS)
+                .select('email')
+                .eq('email', user.email)
+                .maybeSingle();
 
-        const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
-        const isAdmin = !!adminData || !!(fallbackEmail && user.email === fallbackEmail);
-
-        // 2. Check Existing Submission
-        const { data: submission } = await client
-            .from(TABLES.EVALUATIONS)
-            .select('*')
-            .eq('respondent_email', user.email)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (!isMountedRef.current) return;
-
-        setAuth(prev => ({ ...prev, user, isAdmin, loading: false }));
-
-        if (submission) {
-            // Store existing submission ID for update
-            setExistingSubmissionId(submission.id);
-
-            // Load existing data
-            setFormData(submission.answers || {});
-
-            // Restore Role
-            if (['선교사', '인솔자', '단기선교 팀원'].includes(submission.role)) {
-                setRole(submission.role as RoleType);
+            if (adminError && process.env.NODE_ENV === 'development') {
+                console.error('Admin check error:', adminError);
             }
 
-            // Restore Team if exists
-            if (submission.team_missionary && submission.team_missionary !== 'self') {
-                const foundTeam = teams.find(t => t.missionary === submission.team_missionary);
-                if (foundTeam) setSelectedTeam(foundTeam);
+            const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
+            const isAdmin = !!adminData || !!(fallbackEmail && user.email === fallbackEmail);
+
+            // 2. Check Existing Submission
+            const { data: submission, error: submissionError } = await client
+                .from(TABLES.EVALUATIONS)
+                .select('*')
+                .eq('respondent_email', user.email)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (submissionError && process.env.NODE_ENV === 'development') {
+                console.error('Submission check error:', submissionError);
+            }
+
+            if (!isMountedRef.current) return;
+
+            setAuth(prev => ({ ...prev, user, isAdmin, loading: false }));
+
+            if (submission) {
+                // Store existing submission ID for update
+                setExistingSubmissionId(submission.id);
+
+                // Load existing data
+                setFormData(submission.answers || {});
+
+                // Restore Role
+                if (['선교사', '인솔자', '단기선교 팀원'].includes(submission.role)) {
+                    setRole(submission.role as RoleType);
+                }
+
+                // Restore Team if exists
+                if (submission.team_missionary && submission.team_missionary !== 'self') {
+                    const foundTeam = teams.find(t => t.missionary === submission.team_missionary);
+                    if (foundTeam) setSelectedTeam(foundTeam);
+                }
+            }
+        } catch (e) {
+            if (process.env.NODE_ENV === 'development') {
+                console.error('User status check error:', e);
+            }
+            if (isMountedRef.current) {
+                // 에러가 발생해도 기본 사용자 정보는 설정
+                setAuth(prev => ({ ...prev, user, isAdmin: false, loading: false }));
             }
         }
     };
 
     const handleGoogleLogin = useCallback(async () => {
-        if (!sbClient) return;
-        await sbClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.origin }
-        });
+        if (!sbClient) {
+            setError('인증 서비스에 연결할 수 없습니다. 페이지를 새로고침해 주세요.');
+            return;
+        }
+        try {
+            const { error } = await sbClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
+            if (error) {
+                setError('로그인 중 오류가 발생했습니다: ' + error.message);
+            }
+        } catch (e) {
+            setError('로그인 중 오류가 발생했습니다. 다시 시도해 주세요.');
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Google login error:', e);
+            }
+        }
     }, [sbClient]);
 
     const handleLogout = useCallback(async () => {
         if (!sbClient) return;
-        await sbClient.auth.signOut();
-        setAuth({ user: null, isAdmin: false, loading: false });
-        setFormData({});
-        setRole(null);
-        setSelectedTeam(null);
-        setExistingSubmissionId(null);
-        setView('landing');
+        try {
+            const { error } = await sbClient.auth.signOut();
+            if (error && process.env.NODE_ENV === 'development') {
+                console.error('Logout error:', error);
+            }
+        } catch (e) {
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Logout error:', e);
+            }
+        } finally {
+            // 항상 로컬 상태를 초기화
+            setAuth({ user: null, isAdmin: false, loading: false });
+            setFormData({});
+            setRole(null);
+            setSelectedTeam(null);
+            setExistingSubmissionId(null);
+            setView('landing');
+        }
     }, [sbClient]);
 
     // Navigation Handlers
@@ -204,7 +256,9 @@ export default function SurveyContainer() {
 
         // Race condition prevention: Double check with lock
         if (submitLockRef.current) {
-            console.warn('Submission already in progress');
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Submission already in progress');
+            }
             return;
         }
         submitLockRef.current = true;
@@ -223,7 +277,7 @@ export default function SurveyContainer() {
                 team_dept: selectedTeam?.dept || null,
                 team_country: selectedTeam?.country || null,
                 team_leader: selectedTeam?.leader || null,
-                respondent_name: data.respondent_name || (auth.user?.user_metadata?.full_name as string) || 'Anonymous',
+                respondent_name: data.respondent_name || (typeof auth.user?.user_metadata?.full_name === 'string' ? auth.user.user_metadata.full_name : 'Anonymous'),
                 respondent_email: data.respondent_email || auth.user?.email || '',
                 answers: data.answers
             };
@@ -255,7 +309,9 @@ export default function SurveyContainer() {
                 setView('success');
             }
         } catch (e: unknown) {
-            console.error('Submission error:', e);
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Submission error:', e);
+            }
 
             if (isMountedRef.current) {
                 // Recover previous state

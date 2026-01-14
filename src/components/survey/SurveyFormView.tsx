@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Question, TeamInfo, RoleType } from '@/types';
 import { SurveyFormData } from '@/types/survey';
 import { sanitizeInput } from '@/lib/validators';
+import { getBadgeColor } from '@/lib/utils';
 
 interface SurveyFormViewProps {
     role: RoleType;
@@ -67,15 +68,6 @@ export default function SurveyFormView({
         }
     }, [validate, onSubmit, answers]);
 
-    const getBadgeColor = (dept: string): string => {
-        if (dept.includes('15252')) return 'bg-rose-100 text-rose-700 border-rose-200';
-        if (dept.includes('청년')) return 'bg-blue-100 text-blue-700 border-blue-200';
-        if (dept.includes('교육')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-        if (dept.includes('오픈')) return 'bg-amber-100 text-amber-700 border-amber-200';
-        if (dept.includes('글로벌')) return 'bg-violet-100 text-violet-700 border-violet-200';
-        return 'bg-slate-100 text-slate-600 border-slate-200';
-    };
-
     return (
         <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -87,8 +79,8 @@ export default function SurveyFormView({
             <div className="sticky top-0 bg-white/90 backdrop-blur-md z-20 px-4 py-3 border-b border-indigo-100 shadow-sm">
                 <div className="max-w-xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors" aria-label="뒤로 가기">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
 
                         {team ? (
@@ -184,6 +176,7 @@ export default function SurveyFormView({
                                     onChange={e => handleAnswerChange(q.id, e.target.value)}
                                     placeholder="내용을 자유롭게 작성해주세요."
                                     className="w-full p-4 min-h-[120px] bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none shadow-sm text-slate-700 placeholder-slate-400 resize-none"
+                                    aria-label={sanitizeInput(q.text)}
                                 />
                             )}
 
@@ -219,13 +212,15 @@ interface ScaleInputProps {
 
 function ScaleInput({ value, onChange }: ScaleInputProps) {
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" role="group" aria-label="1점(매우 부족)부터 7점(매우 우수)까지 평가">
             <div className="flex justify-between items-center bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
                 {[1, 2, 3, 4, 5, 6, 7].map((num) => (
                     <button
                         key={num}
                         type="button"
                         onClick={() => onChange(num)}
+                        aria-label={`${num}점${num === 1 ? ' (매우 부족)' : num === 7 ? ' (매우 우수)' : ''}`}
+                        aria-pressed={value === num}
                         className={`
                             relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all
                             ${value === num
@@ -243,7 +238,7 @@ function ScaleInput({ value, onChange }: ScaleInputProps) {
                     </button>
                 ))}
             </div>
-            <div className="flex justify-between text-xs font-medium text-slate-400 px-2">
+            <div className="flex justify-between text-xs font-medium text-slate-400 px-2" aria-hidden="true">
                 <span>매우 부족</span>
                 <span>매우 우수</span>
             </div>
@@ -295,6 +290,8 @@ function MultiSelectInput({ options, value, onChange }: MultiSelectInputProps) {
                         <button
                             type="button"
                             onClick={() => toggle(opt)}
+                            aria-pressed={isSelected}
+                            aria-label={`${sanitizeInput(opt)} ${isSelected ? '선택됨' : '선택 안됨'}`}
                             className={`
                                 w-full p-4 rounded-xl text-left transition-all border flex items-center gap-3
                                 ${isSelected
@@ -305,7 +302,7 @@ function MultiSelectInput({ options, value, onChange }: MultiSelectInputProps) {
                             <div className={`
                                 w-6 h-6 rounded-md border flex items-center justify-center transition-colors
                                 ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}
-                            `}>
+                            `} aria-hidden="true">
                                 {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                             </div>
                             <span className="text-sm font-medium">{sanitizeInput(opt)}</span>
@@ -323,6 +320,7 @@ function MultiSelectInput({ options, value, onChange }: MultiSelectInputProps) {
                                     onChange={(e) => handleOtherTextChange(e.target.value)}
                                     placeholder="기타 사유를 입력해주세요..."
                                     className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-700 text-sm"
+                                    aria-label="기타 사유 입력"
                                     autoFocus
                                 />
                             </motion.div>

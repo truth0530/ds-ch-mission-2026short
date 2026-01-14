@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { User } from '@supabase/supabase-js';
 
 interface LandingViewProps {
     onStart: () => void;
-    auth: { user: any; isAdmin: boolean; loading: boolean };
+    auth: { user: User | null; isAdmin: boolean; loading: boolean };
     onLogin: () => void;
     onLogout: () => void;
 }
