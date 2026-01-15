@@ -135,3 +135,61 @@ export const INITIAL_QUESTIONS = [
     ...LEADER_QUESTIONS.filter(q => !commonIds.has(q.id)).map((q, i) => mapToDbQuestion(q, 'leader', i)),
     ...TEAM_QUESTIONS.filter(q => !commonIds.has(q.id)).map((q, i) => mapToDbQuestion(q, 'team_member', i)),
 ];
+
+/**
+ * 질문 ID를 질문 텍스트로 매핑하는 객체 생성
+ */
+const createQuestionMap = (): Record<string, { text: string; type: string }> => {
+    const map: Record<string, { text: string; type: string }> = {};
+
+    // 공통 질문
+    COMMON_SHARED_QUESTIONS.forEach(q => {
+        map[q.id] = { text: q.text, type: q.type };
+    });
+
+    // 선교사 질문
+    MISSIONARY_QUESTIONS.forEach(q => {
+        map[q.id] = { text: q.text, type: q.type };
+    });
+
+    // 인솔자 질문 (공통 제외)
+    LEADER_QUESTIONS.filter(q => !commonIds.has(q.id)).forEach(q => {
+        map[q.id] = { text: q.text, type: q.type };
+    });
+
+    // 팀원 질문 (공통 제외)
+    TEAM_QUESTIONS.filter(q => !commonIds.has(q.id)).forEach(q => {
+        map[q.id] = { text: q.text, type: q.type };
+    });
+
+    return map;
+};
+
+export const QUESTION_MAP = createQuestionMap();
+
+/**
+ * 질문 ID로 질문 텍스트 조회
+ * @param questionId - 질문 ID (예: 'q1', 'l_pre', 't1')
+ * @returns 질문 텍스트 또는 기본값
+ */
+export const getQuestionText = (questionId: string): string => {
+    return QUESTION_MAP[questionId]?.text || questionId;
+};
+
+/**
+ * 질문 ID로 질문 타입 조회
+ * @param questionId - 질문 ID
+ * @returns 질문 타입 ('scale', 'text', 'multi_select') 또는 undefined
+ */
+export const getQuestionType = (questionId: string): string | undefined => {
+    return QUESTION_MAP[questionId]?.type;
+};
+
+/**
+ * 척도(scale) 질문 ID 목록 반환
+ */
+export const getScaleQuestionIds = (): string[] => {
+    return Object.entries(QUESTION_MAP)
+        .filter(([, value]) => value.type === 'scale')
+        .map(([key]) => key);
+};

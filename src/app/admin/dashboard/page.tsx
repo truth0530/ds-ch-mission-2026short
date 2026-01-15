@@ -7,8 +7,16 @@ import { getSbClient, SupabaseClient } from '@/lib/supabase';
 import { ENV_CONFIG, TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
 import { validateEvaluations, sanitizeInput } from '@/lib/validators';
-import { MISSION_TEAMS } from '@/lib/surveyData';
+import { MISSION_TEAMS, getQuestionText, getQuestionType, getScaleQuestionIds } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
+
+interface ScaleStats {
+    questionId: string;
+    questionText: string;
+    count: number;
+    sum: number;
+    average: number;
+}
 
 interface Stats {
     total: number;
@@ -16,6 +24,7 @@ interface Stats {
     teamMemberByTeam: Record<string, number>;
     missionaries: Evaluation[];
     leaders: Evaluation[];
+    scaleAverages: ScaleStats[];
 }
 
 export default function AdminDashboard() {
@@ -30,7 +39,8 @@ export default function AdminDashboard() {
         byRole: { missionary: 0, leader: 0, team_member: 0 },
         teamMemberByTeam: {},
         missionaries: [],
-        leaders: []
+        leaders: [],
+        scaleAverages: []
     });
 
     // Pagination
@@ -41,7 +51,14 @@ export default function AdminDashboard() {
     // Filters
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [teamFilter, setTeamFilter] = useState<string>('all');
+    const [countryFilter, setCountryFilter] = useState<string>('all');
+    const [deptFilter, setDeptFilter] = useState<string>('all');
+    const [dateFrom, setDateFrom] = useState<string>('');
+    const [dateTo, setDateTo] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Analysis View Toggle
+    const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
 
     // Detail Modal
     const [selectedEval, setSelectedEval] = useState<Evaluation | null>(null);
@@ -218,13 +235,18 @@ export default function AdminDashboard() {
             byRole: { missionary: 0, leader: 0, team_member: 0 },
             teamMemberByTeam: {},
             missionaries: [],
-            leaders: []
+            leaders: [],
+            scaleAverages: []
         };
 
         // Initialize all teams with 0
         currentTeams.forEach(t => {
             if (t.missionary) newStats.teamMemberByTeam[t.missionary] = 0;
         });
+
+        // 척도 질문 통계를 위한 임시 저장소
+        const scaleData: Record<string, { sum: number; count: number }> = {};
+        const scaleQuestionIds = getScaleQuestionIds();
 
         data.forEach(evaluation => {
             // Count by role
@@ -239,7 +261,34 @@ export default function AdminDashboard() {
                 const teamKey = evaluation.team_missionary || 'Unknown';
                 newStats.teamMemberByTeam[teamKey] = (newStats.teamMemberByTeam[teamKey] || 0) + 1;
             }
+
+            // 척도 질문 점수 집계
+            if (evaluation.answers) {
+                Object.entries(evaluation.answers).forEach(([questionId, answer]) => {
+                    if (scaleQuestionIds.includes(questionId)) {
+                        const score = Number(answer);
+                        if (!isNaN(score) && score >= 1 && score <= 7) {
+                            if (!scaleData[questionId]) {
+                                scaleData[questionId] = { sum: 0, count: 0 };
+                            }
+                            scaleData[questionId].sum += score;
+                            scaleData[questionId].count++;
+                        }
+                    }
+                });
+            }
         });
+
+        // 척도 평균 계산
+        newStats.scaleAverages = Object.entries(scaleData)
+            .map(([questionId, { sum, count }]) => ({
+                questionId,
+                questionText: getQuestionText(questionId),
+                count,
+                sum,
+                average: count > 0 ? Math.round((sum / count) * 100) / 100 : 0
+            }))
+            .sort((a, b) => b.average - a.average);
 
         setStats(newStats);
     };
@@ -248,6 +297,16 @@ export default function AdminDashboard() {
         return evaluations.filter(evaluation => {
             if (roleFilter !== 'all' && evaluation.role !== roleFilter) return false;
             if (teamFilter !== 'all' && evaluation.team_missionary !== teamFilter) return false;
+            if (countryFilter !== 'all' && evaluation.team_country !== countryFilter) return false;
+            if (deptFilter !== 'all' && evaluation.team_dept !== deptFilter) return false;
+
+            // 날짜 필터
+            if (dateFrom || dateTo) {
+                const evalDate = new Date(evaluation.created_at).toISOString().split('T')[0];
+                if (dateFrom && evalDate < dateFrom) return false;
+                if (dateTo && evalDate > dateTo) return false;
+            }
+
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
                 return (
@@ -258,24 +317,124 @@ export default function AdminDashboard() {
             }
             return true;
         });
-    }, [evaluations, roleFilter, teamFilter, searchQuery]);
+    }, [evaluations, roleFilter, teamFilter, countryFilter, deptFilter, dateFrom, dateTo, searchQuery]);
+
+    // 고유 국가 및 부서 목록
+    const uniqueCountries = useMemo(() =>
+        Array.from(new Set(evaluations.map(e => e.team_country).filter(Boolean))).sort(),
+        [evaluations]
+    );
+
+    const uniqueDepts = useMemo(() =>
+        Array.from(new Set(evaluations.map(e => e.team_dept).filter(Boolean))).sort(),
+        [evaluations]
+    );
+
+    // 척도 질문별 응답 분포 계산
+    const scaleDistributions = useMemo(() => {
+        const scaleQuestionIds = getScaleQuestionIds();
+        const distributions: Record<string, { questionText: string; counts: number[] }> = {};
+
+        scaleQuestionIds.forEach(qId => {
+            distributions[qId] = {
+                questionText: getQuestionText(qId),
+                counts: [0, 0, 0, 0, 0, 0, 0] // 1~7점
+            };
+        });
+
+        filteredEvaluations.forEach(evaluation => {
+            if (evaluation.answers) {
+                Object.entries(evaluation.answers).forEach(([questionId, answer]) => {
+                    if (distributions[questionId]) {
+                        const score = Number(answer);
+                        if (!isNaN(score) && score >= 1 && score <= 7) {
+                            distributions[questionId].counts[score - 1]++;
+                        }
+                    }
+                });
+            }
+        });
+
+        return Object.entries(distributions)
+            .filter(([, data]) => data.counts.some(c => c > 0))
+            .map(([questionId, data]) => ({ questionId, ...data }));
+    }, [filteredEvaluations]);
+
+    // 팀별 척도 질문 평균 비교
+    const teamComparison = useMemo(() => {
+        const scaleQuestionIds = getScaleQuestionIds();
+        const teamData: Record<string, { count: number; scores: Record<string, { sum: number; count: number }> }> = {};
+
+        filteredEvaluations.forEach(evaluation => {
+            const teamKey = evaluation.team_missionary || 'Unknown';
+            if (!teamData[teamKey]) {
+                teamData[teamKey] = { count: 0, scores: {} };
+                scaleQuestionIds.forEach(qId => {
+                    teamData[teamKey].scores[qId] = { sum: 0, count: 0 };
+                });
+            }
+            teamData[teamKey].count++;
+
+            if (evaluation.answers) {
+                Object.entries(evaluation.answers).forEach(([questionId, answer]) => {
+                    if (teamData[teamKey].scores[questionId]) {
+                        const score = Number(answer);
+                        if (!isNaN(score) && score >= 1 && score <= 7) {
+                            teamData[teamKey].scores[questionId].sum += score;
+                            teamData[teamKey].scores[questionId].count++;
+                        }
+                    }
+                });
+            }
+        });
+
+        return Object.entries(teamData)
+            .filter(([, data]) => data.count > 0)
+            .map(([team, data]) => ({
+                team,
+                responseCount: data.count,
+                averages: Object.entries(data.scores).reduce((acc, [qId, { sum, count }]) => {
+                    acc[qId] = count > 0 ? Math.round((sum / count) * 10) / 10 : null;
+                    return acc;
+                }, {} as Record<string, number | null>)
+            }))
+            .sort((a, b) => b.responseCount - a.responseCount);
+    }, [filteredEvaluations]);
 
     const exportToExcel = () => {
-        const exportData = filteredEvaluations.map(evaluation => ({
-            '역할': evaluation.role,
-            '팀': evaluation.team_missionary,
-            '국가': evaluation.team_country,
-            '부서': evaluation.team_dept,
-            '인솔자': evaluation.team_leader,
-            '응답자 이름': evaluation.respondent_name || '익명',
-            '응답자 이메일': evaluation.respondent_email || '익명',
-            '제출일': evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-',
-            '상태': evaluation.response_status || '-',
-            '응답 수': Object.keys(evaluation.answers || {}).length,
-            '제출 시각': new Date(evaluation.created_at).toLocaleString('ko-KR')
-        }));
+        // 기본 정보 + 모든 응답을 질문별로 펼쳐서 내보내기
+        const exportData = filteredEvaluations.map(evaluation => {
+            const baseInfo: Record<string, string | number> = {
+                '역할': evaluation.role,
+                '팀': evaluation.team_missionary || '-',
+                '국가': evaluation.team_country || '-',
+                '부서': evaluation.team_dept || '-',
+                '인솔자': evaluation.team_leader || '-',
+                '응답자 이름': evaluation.respondent_name || '익명',
+                '응답자 이메일': evaluation.respondent_email || '익명',
+                '제출일': evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-',
+                '제출 시각': new Date(evaluation.created_at).toLocaleString('ko-KR')
+            };
+
+            // 각 응답을 질문 텍스트를 키로 추가
+            Object.entries(evaluation.answers || {}).forEach(([questionId, answer]) => {
+                const questionText = getQuestionText(questionId);
+                // 질문 텍스트가 너무 길면 앞 50자만 사용
+                const shortQuestion = questionText.length > 50 ? questionText.substring(0, 50) + '...' : questionText;
+                baseInfo[shortQuestion] = Array.isArray(answer) ? answer.join(', ') : String(answer);
+            });
+
+            return baseInfo;
+        });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // 컬럼 너비 자동 조정
+        const colWidths = Object.keys(exportData[0] || {}).map(key => ({
+            wch: Math.min(Math.max(key.length, 10), 50)
+        }));
+        ws['!cols'] = colWidths;
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '설문 응답');
         XLSX.writeFile(wb, `설문응답_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -441,6 +600,147 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
+                {/* Scale Question Averages */}
+                {stats.scaleAverages.length > 0 && (
+                    <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
+                        <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                            <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
+                            척도 질문 평균 점수 (1~7점)
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {stats.scaleAverages.map(stat => (
+                                <div key={stat.questionId} className="p-4 bg-gray-50 rounded-xl">
+                                    <div className="text-xs text-gray-500 mb-2 line-clamp-2 leading-relaxed" title={stat.questionText}>
+                                        {stat.questionText}
+                                    </div>
+                                    <div className="flex items-end justify-between">
+                                        <div className="text-3xl font-black text-indigo-600">{stat.average.toFixed(1)}</div>
+                                        <div className="text-xs text-gray-400">응답 {stat.count}건</div>
+                                    </div>
+                                    <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-indigo-500 rounded-full transition-all"
+                                            style={{ width: `${(stat.average / 7) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Analysis Toggle Button */}
+                <div className="flex justify-center">
+                    <button
+                        onClick={() => setShowAnalysis(!showAnalysis)}
+                        className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${showAnalysis ? 'bg-indigo-600 text-white' : 'bg-white border-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50'}`}
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        {showAnalysis ? '상세 분석 숨기기' : '상세 분석 보기'}
+                    </button>
+                </div>
+
+                {/* Detailed Analysis Section */}
+                {showAnalysis && (
+                    <div className="space-y-8">
+                        {/* Score Distribution Histograms */}
+                        {scaleDistributions.length > 0 && (
+                            <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
+                                <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                                    <span className="w-2 h-8 bg-cyan-500 rounded-full"></span>
+                                    척도 질문별 응답 분포
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {scaleDistributions.map(dist => {
+                                        const maxCount = Math.max(...dist.counts, 1);
+                                        const total = dist.counts.reduce((a, b) => a + b, 0);
+                                        return (
+                                            <div key={dist.questionId} className="p-4 bg-gray-50 rounded-xl">
+                                                <div className="text-sm text-gray-700 mb-4 line-clamp-2" title={dist.questionText}>
+                                                    {dist.questionText}
+                                                </div>
+                                                <div className="flex items-end gap-1 h-24">
+                                                    {dist.counts.map((count, idx) => (
+                                                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                                                            <div
+                                                                className="w-full bg-cyan-500 rounded-t transition-all hover:bg-cyan-600"
+                                                                style={{ height: `${(count / maxCount) * 100}%`, minHeight: count > 0 ? '4px' : '0' }}
+                                                                title={`${idx + 1}점: ${count}명`}
+                                                            />
+                                                            <span className="text-xs text-gray-500 font-bold">{idx + 1}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-2 text-xs text-gray-400 text-right">총 {total}명 응답</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Team Comparison Table */}
+                        {teamComparison.length > 0 && (
+                            <div className="bg-white rounded-3xl p-8 border-2 border-gray-100">
+                                <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                                    <span className="w-2 h-8 bg-rose-500 rounded-full"></span>
+                                    팀별 척도 질문 평균 비교
+                                </h2>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b-2 border-gray-100">
+                                                <th className="text-left py-3 px-2 font-black text-gray-600 sticky left-0 bg-white">팀 (선교사)</th>
+                                                <th className="text-center py-3 px-2 font-black text-gray-600">응답수</th>
+                                                {getScaleQuestionIds().slice(0, 6).map(qId => (
+                                                    <th key={qId} className="text-center py-3 px-2 font-medium text-gray-500 min-w-[80px]" title={getQuestionText(qId)}>
+                                                        {qId}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {teamComparison.map(row => (
+                                                <tr key={row.team} className="hover:bg-gray-50/50">
+                                                    <td className="py-3 px-2 font-bold text-gray-900 sticky left-0 bg-white">{row.team}</td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold bg-rose-100 text-rose-700">
+                                                            {row.responseCount}
+                                                        </span>
+                                                    </td>
+                                                    {getScaleQuestionIds().slice(0, 6).map(qId => {
+                                                        const avg = row.averages[qId];
+                                                        const bgColor = avg === null ? 'bg-gray-100 text-gray-400' :
+                                                            avg >= 6 ? 'bg-green-100 text-green-700' :
+                                                                avg >= 5 ? 'bg-blue-100 text-blue-700' :
+                                                                    avg >= 4 ? 'bg-yellow-100 text-yellow-700' :
+                                                                        'bg-red-100 text-red-700';
+                                                        return (
+                                                            <td key={qId} className="py-3 px-2 text-center">
+                                                                <span className={`inline-block px-2 py-1 rounded font-bold ${bgColor}`}>
+                                                                    {avg !== null ? avg.toFixed(1) : '-'}
+                                                                </span>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="mt-4 flex gap-4 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-100 rounded"></span> 6점 이상</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-100 rounded"></span> 5~6점</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-100 rounded"></span> 4~5점</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 rounded"></span> 4점 미만</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Team Member Breakdown */}
                     <div className="bg-white rounded-3xl p-8 border-2 border-gray-100 h-full">
@@ -539,20 +839,77 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Filters */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
-                            <option value="all">모든 역할</option>
-                            <option value="선교사">선교사</option>
-                            <option value="인솔자">인솔자</option>
-                            <option value="단기선교 팀원">단기선교 팀원</option>
-                        </select>
-                        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
-                            <option value="all">모든 팀</option>
-                            {uniqueTeams.map(team => (
-                                <option key={team} value={team!}>{team}</option>
-                            ))}
-                        </select>
-                        <input type="text" placeholder="검색 (이름, 이메일, 팀)" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500" />
+                    <div className="space-y-4 mb-6">
+                        {/* Row 1: Role, Team, Search */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="all">모든 역할</option>
+                                <option value="선교사">선교사</option>
+                                <option value="인솔자">인솔자</option>
+                                <option value="단기선교 팀원">단기선교 팀원</option>
+                            </select>
+                            <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="all">모든 팀</option>
+                                {uniqueTeams.map(team => (
+                                    <option key={team} value={team!}>{team}</option>
+                                ))}
+                            </select>
+                            <input type="text" placeholder="검색 (이름, 이메일, 팀)" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500" />
+                        </div>
+
+                        {/* Row 2: Country, Dept, Date Range */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="all">모든 국가</option>
+                                {uniqueCountries.map(country => (
+                                    <option key={country} value={country!}>{country}</option>
+                                ))}
+                            </select>
+                            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="all">모든 부서</option>
+                                {uniqueDepts.map(dept => (
+                                    <option key={dept} value={dept!}>{dept}</option>
+                                ))}
+                            </select>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={e => setDateFrom(e.target.value)}
+                                    className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500 flex-1"
+                                    placeholder="시작일"
+                                />
+                                <span className="text-gray-400">~</span>
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={e => setDateTo(e.target.value)}
+                                    className="bg-gray-50 border-none rounded-xl p-3 font-bold text-sm focus:ring-2 focus:ring-blue-500 flex-1"
+                                    placeholder="종료일"
+                                />
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setRoleFilter('all');
+                                    setTeamFilter('all');
+                                    setCountryFilter('all');
+                                    setDeptFilter('all');
+                                    setDateFrom('');
+                                    setDateTo('');
+                                    setSearchQuery('');
+                                }}
+                                className="bg-gray-100 text-gray-600 rounded-xl p-3 font-bold text-sm hover:bg-gray-200 transition-colors"
+                            >
+                                필터 초기화
+                            </button>
+                        </div>
+
+                        {/* Filter Summary */}
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <span className="font-bold">필터 결과:</span>
+                            <span className="text-blue-600 font-black">{filteredEvaluations.length}</span>
+                            <span>/ {totalCount}건</span>
+                        </div>
                     </div>
 
                     {loading ? (
@@ -690,14 +1047,27 @@ export default function AdminDashboard() {
                             {/* Answers */}
                             <div className="space-y-4">
                                 <h4 className="text-lg font-black text-gray-900">응답 내용</h4>
-                                {Object.entries(selectedEval.answers || {}).map(([key, value]) => (
-                                    <div key={key} className="p-4 bg-gray-50 rounded-xl">
-                                        <div className="text-xs font-black text-blue-600 uppercase tracking-widest mb-2">질문 ID: {sanitizeInput(key)}</div>
-                                        <div className="font-bold text-gray-900">
-                                            {Array.isArray(value) ? value.map(v => sanitizeInput(String(v))).join(', ') : sanitizeInput(String(value))}
+                                {Object.entries(selectedEval.answers || {}).map(([key, value]) => {
+                                    const questionText = getQuestionText(key);
+                                    const questionType = getQuestionType(key);
+                                    const isScale = questionType === 'scale';
+
+                                    return (
+                                        <div key={key} className="p-4 bg-gray-50 rounded-xl">
+                                            <div className="text-sm text-gray-700 mb-2 leading-relaxed">{sanitizeInput(questionText)}</div>
+                                            <div className={`font-bold ${isScale ? 'text-blue-600 text-2xl' : 'text-gray-900'}`}>
+                                                {isScale ? (
+                                                    <span className="flex items-center gap-2">
+                                                        {sanitizeInput(String(value))}
+                                                        <span className="text-sm font-normal text-gray-400">/ 7점</span>
+                                                    </span>
+                                                ) : (
+                                                    Array.isArray(value) ? value.map(v => sanitizeInput(String(v))).join(', ') : sanitizeInput(String(value))
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* Actions */}
