@@ -5,28 +5,12 @@ import * as XLSX from 'xlsx';
 import { getSbClient } from '@/lib/supabase';
 import { TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
-import { validateEvaluations, sanitizeInput } from '@/lib/validators';
-import { MISSION_TEAMS, getQuestionText, getQuestionType, getScaleQuestionIds } from '@/lib/surveyData';
+import { validateEvaluations } from '@/lib/validators';
+import { MISSION_TEAMS, getQuestionText, getScaleQuestionIds } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useRequireAdmin } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
-
-interface ScaleStats {
-    questionId: string;
-    questionText: string;
-    count: number;
-    sum: number;
-    average: number;
-}
-
-interface Stats {
-    total: number;
-    byRole: { missionary: number; leader: number; team_member: number };
-    teamMemberByTeam: Record<string, number>;
-    missionaries: Evaluation[];
-    leaders: Evaluation[];
-    scaleAverages: ScaleStats[];
-}
+import { ResponseDetailModal, DashboardFilters, DashboardSidebar, Stats, FilterState } from '@/components/dashboard';
 
 export default function AdminDashboard() {
     const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
@@ -48,13 +32,31 @@ export default function AdminDashboard() {
     const pageSize = PAGINATION_DEFAULTS.PAGE_SIZE;
 
     // Filters
-    const [roleFilter, setRoleFilter] = useState<string>('all');
-    const [teamFilter, setTeamFilter] = useState<string>('all');
-    const [countryFilter, setCountryFilter] = useState<string>('all');
-    const [deptFilter, setDeptFilter] = useState<string>('all');
-    const [dateFrom, setDateFrom] = useState<string>('');
-    const [dateTo, setDateTo] = useState<string>('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [filters, setFilters] = useState<FilterState>({
+        roleFilter: 'all',
+        teamFilter: 'all',
+        countryFilter: 'all',
+        deptFilter: 'all',
+        dateFrom: '',
+        dateTo: '',
+        searchQuery: '',
+    });
+
+    const handleFilterChange = useCallback((key: keyof FilterState, value: string) => {
+        setFilters(prev => ({ ...prev, [key]: value }));
+    }, []);
+
+    const resetFilters = useCallback(() => {
+        setFilters({
+            roleFilter: 'all',
+            teamFilter: 'all',
+            countryFilter: 'all',
+            deptFilter: 'all',
+            dateFrom: '',
+            dateTo: '',
+            searchQuery: '',
+        });
+    }, []);
 
     // Analysis View Toggle
     const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
@@ -183,6 +185,7 @@ export default function AdminDashboard() {
     };
 
     const filteredEvaluations = useMemo(() => {
+        const { roleFilter, teamFilter, countryFilter, deptFilter, dateFrom, dateTo, searchQuery } = filters;
         return evaluations.filter(evaluation => {
             if (roleFilter !== 'all' && evaluation.role !== roleFilter) return false;
             if (teamFilter !== 'all' && evaluation.team_missionary !== teamFilter) return false;
@@ -205,12 +208,21 @@ export default function AdminDashboard() {
             }
             return true;
         });
-    }, [evaluations, roleFilter, teamFilter, countryFilter, deptFilter, dateFrom, dateTo, searchQuery]);
+    }, [evaluations, filters]);
 
     const openEvalDetail = useCallback((evaluation: Evaluation, index: number) => {
         setSelectedEval(evaluation);
         setSelectedEvalIndex(index);
     }, []);
+
+    const closeModal = useCallback(() => {
+        setSelectedEval(null);
+        setSelectedEvalIndex(-1);
+    }, []);
+
+    const getEvaluationIndex = useCallback((id: string) => {
+        return filteredEvaluations.findIndex(e => e.id === id);
+    }, [filteredEvaluations]);
 
     const navigatePrevEval = useCallback(() => {
         if (selectedEvalIndex > 0) {
@@ -236,14 +248,13 @@ export default function AdminDashboard() {
             } else if (e.key === 'ArrowRight') {
                 navigateNextEval();
             } else if (e.key === 'Escape') {
-                setSelectedEval(null);
-                setSelectedEvalIndex(-1);
+                closeModal();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedEval, navigatePrevEval, navigateNextEval]);
+    }, [selectedEval, navigatePrevEval, navigateNextEval, closeModal]);
 
     const uniqueCountries = useMemo(() =>
         Array.from(new Set(evaluations.map(e => e.team_country).filter(Boolean))).sort(),
@@ -506,91 +517,25 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* Filters */}
-                <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                            <option value="all">모든 역할</option>
-                            <option value="선교사">선교사</option>
-                            <option value="인솔자">인솔자</option>
-                            <option value="단기선교 팀원">단기선교 팀원</option>
-                        </select>
-                        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                            <option value="all">모든 팀</option>
-                            {uniqueTeams.map(team => <option key={team} value={team!}>{team}</option>)}
-                        </select>
-                        <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                            <option value="all">모든 국가</option>
-                            {uniqueCountries.map(c => <option key={c} value={c!}>{c}</option>)}
-                        </select>
-                        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                            <option value="all">모든 부서</option>
-                            {uniqueDepts.map(d => <option key={d} value={d!}>{d}</option>)}
-                        </select>
-                        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <span className="text-gray-300">~</span>
-                        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <input type="text" placeholder="검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32" />
-                        <button onClick={() => { setRoleFilter('all'); setTeamFilter('all'); setCountryFilter('all'); setDeptFilter('all'); setDateFrom(''); setDateTo(''); setSearchQuery(''); }} className="text-xs text-gray-400 hover:text-gray-600 px-2">초기화</button>
-                        <div className="flex-1" />
-                        <span className="text-xs text-gray-500">
-                            <span className="font-semibold text-gray-700">{filteredEvaluations.length}</span> / {totalCount}건
-                        </span>
-                    </div>
-                </div>
+                <DashboardFilters
+                    filters={filters}
+                    onFilterChange={handleFilterChange}
+                    onReset={resetFilters}
+                    uniqueTeams={uniqueTeams as string[]}
+                    uniqueCountries={uniqueCountries as string[]}
+                    uniqueDepts={uniqueDepts as string[]}
+                    filteredCount={filteredEvaluations.length}
+                    totalCount={totalCount}
+                />
 
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    {/* Left Sidebar - Team/Role Summary */}
-                    <div className="lg:col-span-1 space-y-4">
-                        {/* Team Breakdown */}
-                        <div className="bg-white border border-gray-200 rounded-lg">
-                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">팀별 제출</div>
-                            <div className="max-h-48 overflow-y-auto">
-                                {teams.map(team => {
-                                    const count = stats.teamMemberByTeam[team.missionary] || 0;
-                                    return (
-                                        <div key={team.id || team.missionary} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                                            <span className="text-gray-700 truncate flex-1" title={team.missionary}>{team.missionary}</span>
-                                            <span className={`font-medium ${count > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{count}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Missionary List */}
-                        <div className="bg-white border border-gray-200 rounded-lg">
-                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">선교사 ({stats.missionaries.length})</div>
-                            <div className="max-h-36 overflow-y-auto">
-                                {stats.missionaries.length > 0 ? stats.missionaries.map(m => {
-                                    const idx = filteredEvaluations.findIndex(e => e.id === m.id);
-                                    return (
-                                        <div key={m.id} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                                            <span className="text-gray-700">{m.respondent_name || '익명'}</span>
-                                            <button onClick={() => openEvalDetail(m, idx >= 0 ? idx : 0)} className="text-blue-500 hover:text-blue-700 text-[10px]">보기</button>
-                                        </div>
-                                    );
-                                }) : <div className="px-3 py-3 text-center text-gray-400 text-xs">없음</div>}
-                            </div>
-                        </div>
-
-                        {/* Leader List */}
-                        <div className="bg-white border border-gray-200 rounded-lg">
-                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">인솔자 ({stats.leaders.length})</div>
-                            <div className="max-h-36 overflow-y-auto">
-                                {stats.leaders.length > 0 ? stats.leaders.map(l => {
-                                    const idx = filteredEvaluations.findIndex(e => e.id === l.id);
-                                    return (
-                                        <div key={l.id} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                                            <span className="text-gray-700">{l.respondent_name || '익명'}</span>
-                                            <button onClick={() => openEvalDetail(l, idx >= 0 ? idx : 0)} className="text-blue-500 hover:text-blue-700 text-[10px]">보기</button>
-                                        </div>
-                                    );
-                                }) : <div className="px-3 py-3 text-center text-gray-400 text-xs">없음</div>}
-                            </div>
-                        </div>
-                    </div>
+                    <DashboardSidebar
+                        teams={teams}
+                        stats={stats}
+                        onViewEvaluation={openEvalDetail}
+                        getEvaluationIndex={getEvaluationIndex}
+                    />
 
                     {/* Main Table */}
                     <div className="lg:col-span-3">
@@ -654,81 +599,17 @@ export default function AdminDashboard() {
                 </div>
             </main>
 
-            {/* Detail Modal */}
             {selectedEval && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }}>
-                    <div className="bg-white rounded-lg max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-xl" onClick={e => e.stopPropagation()}>
-                        {/* Modal Header */}
-                        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <h3 className="font-bold text-gray-900">응답 상세</h3>
-                                <span className="text-xs text-gray-400">{selectedEvalIndex + 1} / {filteredEvaluations.length}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <button onClick={navigatePrevEval} disabled={selectedEvalIndex <= 0} className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-30" title="이전 (←)">
-                                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                                </button>
-                                <button onClick={navigateNextEval} disabled={selectedEvalIndex >= filteredEvaluations.length - 1} className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-30" title="다음 (→)">
-                                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                                </button>
-                                <div className="w-px h-4 bg-gray-200 mx-1" />
-                                <button onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }} className="p-1.5 hover:bg-gray-100 rounded" title="닫기 (Esc)">
-                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="overflow-y-auto max-h-[calc(85vh-56px)]">
-                            {/* Meta Info */}
-                            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
-                                <div><span className="text-gray-400 block">역할</span><span className="font-medium text-gray-800">{selectedEval.role}</span></div>
-                                <div><span className="text-gray-400 block">팀</span><span className="font-medium text-gray-800">{selectedEval.team_missionary || '-'}</span></div>
-                                <div><span className="text-gray-400 block">국가</span><span className="font-medium text-gray-800">{selectedEval.team_country || '-'}</span></div>
-                                <div><span className="text-gray-400 block">부서</span><span className="font-medium text-gray-800">{selectedEval.team_dept || '-'}</span></div>
-                                <div><span className="text-gray-400 block">응답자</span><span className="font-medium text-gray-800">{selectedEval.respondent_name || '익명'}</span></div>
-                                <div><span className="text-gray-400 block">제출일</span><span className="font-medium text-gray-800">{new Date(selectedEval.created_at).toLocaleString('ko-KR')}</span></div>
-                            </div>
-
-                            {/* Answers */}
-                            <div className="p-4 space-y-2">
-                                {Object.entries(selectedEval.answers || {}).map(([key, value]) => {
-                                    const questionText = getQuestionText(key);
-                                    const questionType = getQuestionType(key);
-                                    const isScale = questionType === 'scale';
-
-                                    return (
-                                        <div key={key} className="p-3 bg-gray-50 rounded-lg">
-                                            <div className="text-xs text-gray-500 mb-1">{sanitizeInput(questionText)}</div>
-                                            <div className={`font-medium ${isScale ? 'text-blue-600 text-lg' : 'text-gray-800 text-sm'}`}>
-                                                {isScale ? (
-                                                    <span>{sanitizeInput(String(value))} <span className="text-xs font-normal text-gray-400">/ 7</span></span>
-                                                ) : (
-                                                    Array.isArray(value) ? value.map(v => sanitizeInput(String(v))).join(', ') : sanitizeInput(String(value))
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Footer */}
-                            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <button onClick={navigatePrevEval} disabled={selectedEvalIndex <= 0} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-30 flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                                        이전
-                                    </button>
-                                    <button onClick={navigateNextEval} disabled={selectedEvalIndex >= filteredEvaluations.length - 1} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-30 flex items-center gap-1">
-                                        다음
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                                    </button>
-                                    <span className="text-[10px] text-gray-400 ml-2">키보드: ← → Esc</span>
-                                </div>
-                                <button onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }} className="px-4 py-1.5 text-xs bg-gray-900 text-white rounded hover:bg-gray-800">닫기</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <ResponseDetailModal
+                    evaluation={selectedEval}
+                    index={selectedEvalIndex}
+                    totalCount={filteredEvaluations.length}
+                    onClose={closeModal}
+                    onPrev={navigatePrevEval}
+                    onNext={navigateNextEval}
+                    canGoPrev={selectedEvalIndex > 0}
+                    canGoNext={selectedEvalIndex < filteredEvaluations.length - 1}
+                />
             )}
         </div>
     );
