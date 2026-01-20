@@ -297,14 +297,14 @@ export default function AdminQuestionsPage() {
                             {loading ? (
                                 <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div></div>
                             ) : (
-                                <table className="w-full text-xs">
+                                <table className="w-full text-xs" role="table" aria-label="설문 문항 목록">
                                     <thead className="bg-gray-50 border-b border-gray-200">
                                         <tr>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-600 w-20">역할</th>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-600 w-20">타입</th>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-600">문항</th>
-                                            <th className="text-center py-2 px-3 font-medium text-gray-600 w-16">상태</th>
-                                            <th className="text-right py-2 px-3 font-medium text-gray-600 w-16"></th>
+                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600 w-20">역할</th>
+                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600 w-20">타입</th>
+                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">문항</th>
+                                            <th scope="col" className="text-center py-2 px-3 font-medium text-gray-600 w-16">상태</th>
+                                            <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600 w-16"><span className="sr-only">작업</span></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -407,14 +407,14 @@ export default function AdminQuestionsPage() {
 
                         {/* Table */}
                         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                            <table className="w-full text-xs">
+                            <table className="w-full text-xs" role="table" aria-label="선교 팀 목록">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">국가</th>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">선교사</th>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">팀장</th>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">기간</th>
-                                        <th className="text-right py-2 px-3 font-medium text-gray-600"></th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">국가</th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">선교사</th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">팀장</th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">기간</th>
+                                        <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">작업</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -448,13 +448,13 @@ export default function AdminQuestionsPage() {
 
                         {/* Table */}
                         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                            <table className="w-full text-xs">
+                            <table className="w-full text-xs" role="table" aria-label="관리자 목록">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">이메일</th>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">추가일</th>
-                                        <th className="text-left py-2 px-3 font-medium text-gray-600">추가자</th>
-                                        <th className="text-right py-2 px-3 font-medium text-gray-600"></th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">이메일</th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">추가일</th>
+                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">추가자</th>
+                                        <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">작업</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>

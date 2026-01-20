@@ -740,15 +740,15 @@ export default function AdminDashboard() {
                             ) : (
                                 <>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-xs">
+                                        <table className="w-full text-xs" role="table" aria-label="설문 응답 목록">
                                             <thead className="bg-gray-50 border-b border-gray-200">
                                                 <tr>
-                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">역할</th>
-                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">팀</th>
-                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">응답자</th>
-                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">제출일</th>
-                                                    <th className="text-center py-2 px-3 font-medium text-gray-600">응답</th>
-                                                    <th className="text-right py-2 px-3 font-medium text-gray-600"></th>
+                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">역할</th>
+                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">팀</th>
+                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">응답자</th>
+                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">제출일</th>
+                                                    <th scope="col" className="text-center py-2 px-3 font-medium text-gray-600">응답수</th>
+                                                    <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">상세보기</span></th>
                                                 </tr>
                                             </thead>
                                             <tbody>

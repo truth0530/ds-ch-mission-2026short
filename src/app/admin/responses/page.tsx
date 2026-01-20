@@ -234,10 +234,15 @@ export default function ResponsesPage() {
     };
 
     const SortIndicator = ({ column }: { column: string }) => {
-        if (sortConfig.key !== column) return <span className="text-gray-300 ml-0.5">-</span>;
-        if (sortConfig.direction === 'asc') return <span className="text-gray-700 ml-0.5">A</span>;
-        if (sortConfig.direction === 'desc') return <span className="text-gray-700 ml-0.5">D</span>;
-        return <span className="text-gray-300 ml-0.5">-</span>;
+        if (sortConfig.key !== column) return <span className="text-gray-300 ml-0.5" aria-hidden="true">-</span>;
+        if (sortConfig.direction === 'asc') return <span className="text-gray-700 ml-0.5" aria-hidden="true">A</span>;
+        if (sortConfig.direction === 'desc') return <span className="text-gray-700 ml-0.5" aria-hidden="true">D</span>;
+        return <span className="text-gray-300 ml-0.5" aria-hidden="true">-</span>;
+    };
+
+    const getAriaSort = (column: string): 'ascending' | 'descending' | 'none' => {
+        if (sortConfig.key !== column || !sortConfig.direction) return 'none';
+        return sortConfig.direction === 'asc' ? 'ascending' : 'descending';
     };
 
     if (authLoading) {
@@ -314,10 +319,12 @@ export default function ResponsesPage() {
                     </div>
                 ) : (
                     <div className="bg-white rounded border border-gray-200 overflow-auto" style={{ maxHeight: 'calc(100vh - 60px)' }}>
-                        <table className="w-max min-w-full text-xs border-collapse">
+                        <table className="w-max min-w-full text-xs border-collapse" role="table" aria-label="설문 응답 데이터 시트">
                             <thead className="bg-gray-100 sticky top-0 z-10">
                                 <tr>
                                     <th
+                                        scope="col"
+                                        aria-sort={getAriaSort('created_at')}
                                         className="relative border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap"
                                         style={{ width: columnWidths.created_at, minWidth: columnWidths.created_at }}
                                         onClick={() => handleSort('created_at')}
@@ -336,24 +343,26 @@ export default function ResponsesPage() {
                                             }}
                                         />
                                     </th>
-                                    <th className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.role }} onClick={() => handleSort('role')}>
+                                    <th scope="col" aria-sort={getAriaSort('role')} className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.role }} onClick={() => handleSort('role')}>
                                         역할 <SortIndicator column="role" />
                                     </th>
-                                    <th className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.respondent_name }} onClick={() => handleSort('respondent_name')}>
+                                    <th scope="col" aria-sort={getAriaSort('respondent_name')} className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.respondent_name }} onClick={() => handleSort('respondent_name')}>
                                         응답자 <SortIndicator column="respondent_name" />
                                     </th>
-                                    <th className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.respondent_email }} onClick={() => handleSort('respondent_email')}>
+                                    <th scope="col" aria-sort={getAriaSort('respondent_email')} className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.respondent_email }} onClick={() => handleSort('respondent_email')}>
                                         이메일 <SortIndicator column="respondent_email" />
                                     </th>
-                                    <th className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.team_country }} onClick={() => handleSort('team_country')}>
+                                    <th scope="col" aria-sort={getAriaSort('team_country')} className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.team_country }} onClick={() => handleSort('team_country')}>
                                         국가 <SortIndicator column="team_country" />
                                     </th>
-                                    <th className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.team_missionary }} onClick={() => handleSort('team_missionary')}>
+                                    <th scope="col" aria-sort={getAriaSort('team_missionary')} className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" style={{ width: columnWidths.team_missionary }} onClick={() => handleSort('team_missionary')}>
                                         선교사 <SortIndicator column="team_missionary" />
                                     </th>
                                     {questionColumns.map(q => (
                                         <th
                                             key={q.id}
+                                            scope="col"
+                                            aria-sort={getAriaSort(`q_${q.id}`)}
                                             className="border-r border-gray-200 px-2 py-1.5 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
                                             style={{ minWidth: 100, maxWidth: 180 }}
                                             onClick={() => handleSort(`q_${q.id}`)}
