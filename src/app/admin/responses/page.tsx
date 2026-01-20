@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { getSbClient } from '@/lib/supabase';
-import { TABLES, ENV_CONFIG } from '@/lib/constants';
-import { User } from '@supabase/supabase-js';
+import { TABLES } from '@/lib/constants';
 import { Question } from '@/lib/surveyData';
+import { useRequireAdmin } from '@/hooks/useAdminAuth';
+import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 import * as XLSX from 'xlsx';
 
 interface Evaluation {
@@ -24,14 +25,14 @@ type SortDirection = 'asc' | 'desc' | null;
 type SortConfig = { key: string; direction: SortDirection };
 
 export default function ResponsesPage() {
-    const [user, setUser] = useState<User | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState(false);
-    const [authLoading, setAuthLoading] = useState(true);
+    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
+
     const [loading, setLoading] = useState(true);
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
     const [searchTerm, setSearchTerm] = useState('');
+    const [dataError, setDataError] = useState<string | null>(null);
 
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
         created_at: 130,
@@ -43,85 +44,41 @@ export default function ResponsesPage() {
     });
 
     useEffect(() => {
-        const client = getSbClient();
-        if (!client) {
-            setAuthLoading(false);
-            return;
-        }
-
-        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) {
-                checkAuthorization(client, session.user);
-            } else {
-                setUser(null);
-                setIsAuthorized(false);
-                setAuthLoading(false);
-            }
-        });
-        return () => subscription.unsubscribe();
-    }, []);
-
-    useEffect(() => {
         if (isAuthorized) {
             fetchData();
         }
     }, [isAuthorized]);
 
-    const checkAuthorization = async (client: ReturnType<typeof getSbClient>, currentUser: User) => {
-        if (!client) return;
-        try {
-            const { data } = await client
-                .from(TABLES.ADMIN_USERS)
-                .select('*')
-                .eq('email', currentUser.email)
-                .maybeSingle();
-            if (data || currentUser.email === ENV_CONFIG.ADMIN_EMAIL) {
-                setUser(currentUser);
-                setIsAuthorized(true);
-            } else {
-                setIsAuthorized(false);
-                setUser(currentUser);
-            }
-        } catch {
-            setIsAuthorized(false);
-            setUser(currentUser);
-        } finally {
-            setAuthLoading(false);
-        }
-    };
-
     const fetchData = async () => {
         const client = getSbClient();
-        if (!client) return;
+        if (!client) {
+            setDataError('데이터베이스 연결에 실패했습니다.');
+            setLoading(false);
+            return;
+        }
         setLoading(true);
+        setDataError(null);
 
-        const [evalResult, questionsResult] = await Promise.all([
-            client.from(TABLES.EVALUATIONS).select('*').order('created_at', { ascending: false }),
-            client.from(TABLES.QUESTIONS).select('*').eq('is_hidden', false).order('sort_order', { ascending: true })
-        ]);
+        try {
+            const [evalResult, questionsResult] = await Promise.all([
+                client.from(TABLES.EVALUATIONS).select('*').order('created_at', { ascending: false }),
+                client.from(TABLES.QUESTIONS).select('*').eq('is_hidden', false).order('sort_order', { ascending: true })
+            ]);
 
-        if (!evalResult.error) setEvaluations(evalResult.data || []);
-        if (!questionsResult.error) setQuestions(questionsResult.data || []);
-        setLoading(false);
-    };
-
-    const handleLogin = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        await client.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                queryParams: { access_type: 'offline', prompt: 'select_account' },
-                redirectTo: window.location.origin + '/admin/responses'
+            if (evalResult.error) {
+                setDataError('응답 데이터를 불러오는데 실패했습니다.');
+            } else {
+                setEvaluations(evalResult.data || []);
             }
-        });
-    };
 
-    const handleLogout = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        await client.auth.signOut();
-        window.location.reload();
+            if (!questionsResult.error) {
+                setQuestions(questionsResult.data || []);
+            }
+        } catch {
+            setDataError('데이터를 불러오는 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSort = (key: string) => {
@@ -254,42 +211,16 @@ export default function ResponsesPage() {
     }
 
     if (!isAuthorized) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
-                <div className="bg-white p-8 rounded-lg border border-gray-200 w-full max-w-xs text-center">
-                    <h1 className="text-lg font-bold mb-2 text-gray-900">응답 데이터</h1>
-                    <p className="text-gray-500 text-sm mb-6">
-                        {user ? `${user.email}은 접근 권한이 없습니다.` : '관리자 계정으로 로그인해 주세요.'}
-                    </p>
-                    {!user ? (
-                        <button onClick={handleLogin} className="w-full py-2 bg-white border border-gray-300 rounded text-sm font-medium flex items-center justify-center gap-2 hover:bg-gray-50">
-                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="" />
-                            <span className="text-gray-700">Google 로그인</span>
-                        </button>
-                    ) : (
-                        <button onClick={handleLogout} className="w-full py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800">
-                            다른 계정으로 로그인
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
+        return <AdminLoginCard user={user} onLogin={() => login('/admin/responses')} onLogout={logout} title="응답 데이터" />;
     }
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans text-sm">
-            {/* Header */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-full mx-auto px-4 h-11 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <span className="font-bold text-gray-900">Mission Survey</span>
-                        <nav className="flex items-center gap-1 text-xs">
-                            <a href="/admin/dashboard" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">대시보드</a>
-                            <a href="/admin/responses" className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded font-medium">응답시트</a>
-                            <a href="/admin/questions" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">설정</a>
-                        </nav>
-                    </div>
-                    <div className="flex items-center gap-2">
+            <AdminHeader
+                activePage="responses"
+                onLogout={logout}
+                rightContent={
+                    <>
                         <span className="text-xs text-gray-500">{sortedData.length}건</span>
                         <input
                             type="text"
@@ -304,15 +235,13 @@ export default function ResponsesPage() {
                         >
                             Excel
                         </button>
-                        <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-gray-100" title="로그아웃">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </button>
-                    </div>
-                </div>
-            </header>
+                    </>
+                }
+            />
 
-            {/* Table */}
-            <div className="p-2">
+            <main className="p-2">
+                <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
+
                 {loading ? (
                     <div className="flex items-center justify-center py-16">
                         <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
@@ -431,7 +360,7 @@ export default function ResponsesPage() {
                         )}
                     </div>
                 )}
-            </div>
+            </main>
         </div>
     );
 }

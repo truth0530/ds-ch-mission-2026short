@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { User } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import { getSbClient, SupabaseClient } from '@/lib/supabase';
-import { ENV_CONFIG, TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
+import { getSbClient } from '@/lib/supabase';
+import { TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
 import { validateEvaluations, sanitizeInput } from '@/lib/validators';
 import { MISSION_TEAMS, getQuestionText, getQuestionType, getScaleQuestionIds } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
+import { useRequireAdmin } from '@/hooks/useAdminAuth';
+import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 
 interface ScaleStats {
     questionId: string;
@@ -28,11 +29,9 @@ interface Stats {
 }
 
 export default function AdminDashboard() {
-    const [loading, setLoading] = useState(true);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [user, setUser] = useState<User | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState(false);
+    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
 
+    const [loading, setLoading] = useState(true);
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
     const [stats, setStats] = useState<Stats>({
         total: 0,
@@ -82,112 +81,12 @@ export default function AdminDashboard() {
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
 
+    // Fetch data when authorized
     useEffect(() => {
-        let isMounted = true;
-        let subscription: { unsubscribe: () => void } | null = null;
-
-        const client = getSbClient();
-        if (!client) {
-            if (process.env.NODE_ENV === 'development') {
-                console.error('Supabase client not initialized. Check environment variables.');
-            }
-            setAuthLoading(false);
-            return;
-        }
-
-        client.auth.getSession()
-            .then(({ data: { session } }) => {
-                if (!isMounted) return;
-                if (session?.user) {
-                    checkAuthorization(client, session.user);
-                } else {
-                    setUser(null);
-                    setIsAuthorized(false);
-                    setAuthLoading(false);
-                }
-            })
-            .catch((error) => {
-                if (!isMounted) return;
-                if (process.env.NODE_ENV === 'development') {
-                    console.error('Failed to get session:', error);
-                }
-                setAuthLoading(false);
-            });
-
-        const { data } = client.auth.onAuthStateChange((_event, session) => {
-            if (!isMounted) return;
-            if (session?.user) {
-                checkAuthorization(client, session.user);
-            } else {
-                setUser(null);
-                setIsAuthorized(false);
-                setAuthLoading(false);
-            }
-        });
-        subscription = data.subscription;
-
-        return () => {
-            isMounted = false;
-            subscription?.unsubscribe();
-        };
-    }, []);
-
-    const checkAuthorization = async (client: SupabaseClient, currentUser: User) => {
-        const { data } = await client
-            .from(TABLES.ADMIN_USERS)
-            .select('email')
-            .eq('email', currentUser.email)
-            .maybeSingle();
-
-        const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
-        if (data || (fallbackEmail && currentUser.email === fallbackEmail)) {
-            setUser(currentUser);
-            setIsAuthorized(true);
+        if (isAuthorized && client) {
             fetchData();
-        } else {
-            setIsAuthorized(false);
-            setUser(currentUser);
         }
-        setAuthLoading(false);
-    };
-
-    const handleLogin = async () => {
-        const client = getSbClient();
-        if (!client) {
-            showToast('인증 서비스에 연결할 수 없습니다.', 'error');
-            return;
-        }
-        try {
-            const { error } = await client.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.origin + '/admin/dashboard'
-                }
-            });
-            if (error) {
-                showToast('로그인 중 오류가 발생했습니다: ' + error.message, 'error');
-            }
-        } catch (e) {
-            showToast('로그인 중 오류가 발생했습니다. 다시 시도해 주세요.', 'error');
-            if (process.env.NODE_ENV === 'development') {
-                console.error('Login error:', e);
-            }
-        }
-    };
-
-    const handleLogout = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        try {
-            await client.auth.signOut();
-        } catch (e) {
-            if (process.env.NODE_ENV === 'development') {
-                console.error('Logout error:', e);
-            }
-        } finally {
-            window.location.reload();
-        }
-    };
+    }, [isAuthorized, client]);
 
     const fetchData = async (pageNum = 0) => {
         setLoading(true);
@@ -485,31 +384,7 @@ export default function AdminDashboard() {
     }
 
     if (!isAuthorized) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-                <div className="bg-white p-8 rounded-lg shadow-sm w-full max-w-sm text-center border border-gray-200">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                    </div>
-                    <h1 className="text-lg font-bold mb-1 text-gray-900">관리자 로그인</h1>
-                    <p className="text-gray-500 text-sm mb-6">
-                        {user ? `${user.email}은 권한이 없습니다.` : '관리자 계정으로 로그인해 주세요.'}
-                    </p>
-                    {!user ? (
-                        <button onClick={handleLogin} className="w-full py-3 bg-white border border-gray-200 rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors text-sm">
-                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="" />
-                            Google 로그인
-                        </button>
-                    ) : (
-                        <button onClick={handleLogout} className="w-full py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm">
-                            다른 계정으로 로그인
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
+        return <AdminLoginCard user={user} onLogin={() => login('/admin/dashboard')} onLogout={logout} title="대시보드" />;
     }
 
     const uniqueTeams = Array.from(new Set(evaluations.map(e => e.team_missionary))).filter(Boolean);
@@ -519,27 +394,14 @@ export default function AdminDashboard() {
         <div className="min-h-screen bg-gray-50 font-sans text-sm">
             <ToastContainer toasts={toasts} onClose={hideToast} />
 
-            {/* Compact Header */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-screen-xl mx-auto px-4 h-11 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <span className="font-bold text-gray-900">Mission Survey</span>
-                        <nav className="flex items-center gap-1 text-xs">
-                            <a href="/admin/dashboard" className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded font-medium">대시보드</a>
-                            <a href="/admin/responses" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">응답시트</a>
-                            <a href="/admin/questions" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">설정</a>
-                        </nav>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>
-                        <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-red-500" title="로그아웃">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <AdminHeader
+                activePage="dashboard"
+                onLogout={logout}
+                rightContent={<span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>}
+            />
 
             <main className="max-w-screen-xl mx-auto px-4 py-4">
+                <AdminErrorAlert error={authError} onDismiss={clearError} />
                 {/* Summary Bar */}
                 <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
                     <div className="flex items-center gap-6">

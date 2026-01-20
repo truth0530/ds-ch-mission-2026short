@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { getSbClient } from '@/lib/supabase';
 import { INITIAL_QUESTIONS, Question, MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
 import { QuestionType } from '@/types';
-import { ENV_CONFIG, TABLES } from '@/lib/constants';
+import { TABLES } from '@/lib/constants';
 import { isValidEmail, generateId } from '@/lib/validators';
-import { User } from '@supabase/supabase-js';
+import { useRequireAdmin } from '@/hooks/useAdminAuth';
+import { AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 
 interface AdminUser {
     email: string;
@@ -15,13 +17,13 @@ interface AdminUser {
 }
 
 export default function AdminQuestionsPage() {
+    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
+
     const [activeTab, setActiveTab] = useState<'questions' | 'admins' | 'teams'>('questions');
     const [questions, setQuestions] = useState<Question[]>([]);
     const [admins, setAdmins] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [user, setUser] = useState<User | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState(false);
+    const [dataError, setDataError] = useState<string | null>(null);
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<Partial<Question>>({});
@@ -46,69 +48,36 @@ export default function AdminQuestionsPage() {
 
     const fetchTeams = async () => {
         const client = getSbClient();
-        if (!client) return;
+        if (!client) { setDataError('데이터베이스 연결 실패'); return; }
         const { data, error } = await client.from(TABLES.TEAMS).select('*').order('country', { ascending: true });
-        if (!error) setTeams(data || []);
+        if (error) setDataError('팀 데이터 로드 실패');
+        else setTeams(data || []);
     };
 
     const fetchQuestions = async () => {
         const client = getSbClient();
-        if (!client) return;
+        if (!client) { setDataError('데이터베이스 연결 실패'); return; }
         setLoading(true);
         const { data, error } = await client.from(TABLES.QUESTIONS).select('*').order('sort_order', { ascending: true });
-        if (!error) setQuestions(data || []);
+        if (error) setDataError('문항 데이터 로드 실패');
+        else setQuestions(data || []);
         setLoading(false);
     };
 
     const fetchAdmins = async () => {
         const client = getSbClient();
-        if (!client) return;
+        if (!client) { setDataError('데이터베이스 연결 실패'); return; }
         const { data, error } = await client.from(TABLES.ADMIN_USERS).select('*').order('created_at', { ascending: false });
-        if (!error) setAdmins(data || []);
+        if (error) setDataError('관리자 데이터 로드 실패');
+        else setAdmins(data || []);
     };
-
-    useEffect(() => {
-        const client = getSbClient();
-        if (!client) { setAuthLoading(false); return; }
-        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) checkAuthorization(client, session.user);
-            else { setUser(null); setIsAuthorized(false); setAuthLoading(false); }
-        });
-        return () => subscription.unsubscribe();
-    }, []);
 
     useEffect(() => {
         if (isAuthorized) {
+            setDataError(null);
             Promise.allSettled([fetchQuestions(), fetchAdmins(), fetchTeams()]);
         }
     }, [isAuthorized]);
-
-    const checkAuthorization = async (client: ReturnType<typeof getSbClient>, currentUser: User) => {
-        if (!client) return;
-        const { data } = await client.from(TABLES.ADMIN_USERS).select('*').eq('email', currentUser.email).maybeSingle();
-        if (data || currentUser.email === ENV_CONFIG.ADMIN_EMAIL) {
-            setUser(currentUser);
-            setIsAuthorized(true);
-        } else {
-            setIsAuthorized(false);
-            setUser(currentUser);
-        }
-        setAuthLoading(false);
-    };
-
-    const handleLogin = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/admin/questions' } });
-        if (error) showNotification('로그인 오류: ' + error.message, 'error');
-    };
-
-    const handleLogout = async () => {
-        const client = getSbClient();
-        if (!client) return;
-        await client.auth.signOut();
-        window.location.reload();
-    };
 
     const handleSaveQuestion = async (id: string) => {
         const client = getSbClient();
@@ -195,24 +164,7 @@ export default function AdminQuestionsPage() {
     }
 
     if (!isAuthorized) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-                <div className="bg-white p-8 rounded-lg shadow-sm w-full max-w-sm text-center border border-gray-200">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                    </div>
-                    <h1 className="text-lg font-bold mb-1 text-gray-900">관리자 로그인</h1>
-                    <p className="text-gray-500 text-sm mb-6">{user ? `${user.email}은 권한이 없습니다.` : '관리자 계정으로 로그인해 주세요.'}</p>
-                    {!user ? (
-                        <button onClick={handleLogin} className="w-full py-3 bg-white border border-gray-200 rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-gray-50 text-sm">
-                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="" />Google 로그인
-                        </button>
-                    ) : (
-                        <button onClick={handleLogout} className="w-full py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 text-sm">다른 계정으로 로그인</button>
-                    )}
-                </div>
-            </div>
-        );
+        return <AdminLoginCard user={user} onLogin={() => login('/admin/questions')} onLogout={logout} title="설정" />;
     }
 
     const filteredQuestions = questions.filter(q =>
@@ -250,9 +202,9 @@ export default function AdminQuestionsPage() {
                 <div className="max-w-screen-xl mx-auto px-4 h-11 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <span className="font-bold text-gray-900">Mission Survey</span>
-                        <nav className="flex items-center gap-1 text-xs">
-                            <a href="/admin/dashboard" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">대시보드</a>
-                            <a href="/admin/responses" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">응답시트</a>
+                        <nav className="flex items-center gap-1 text-xs" aria-label="관리자 메뉴">
+                            <Link href="/admin/dashboard" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">대시보드</Link>
+                            <Link href="/admin/responses" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">응답시트</Link>
                             <button onClick={() => setActiveTab('questions')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'questions' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>문항</button>
                             <button onClick={() => setActiveTab('teams')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'teams' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>팀</button>
                             <button onClick={() => setActiveTab('admins')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'admins' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>관리자</button>
@@ -260,7 +212,7 @@ export default function AdminQuestionsPage() {
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>
-                        <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-red-500" title="로그아웃">
+                        <button onClick={logout} className="text-xs text-gray-400 hover:text-red-500" title="로그아웃" aria-label="로그아웃">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                         </button>
                     </div>
@@ -268,6 +220,7 @@ export default function AdminQuestionsPage() {
             </header>
 
             <main className="max-w-screen-xl mx-auto px-4 py-4">
+                <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
                 {activeTab === 'questions' && (
                     <div className="space-y-3">
                         {/* Actions */}
