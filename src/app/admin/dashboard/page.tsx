@@ -62,6 +62,7 @@ export default function AdminDashboard() {
 
     // Detail Modal
     const [selectedEval, setSelectedEval] = useState<Evaluation | null>(null);
+    const [selectedEvalIndex, setSelectedEvalIndex] = useState<number>(-1);
 
     // Teams
     const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS);
@@ -94,7 +95,6 @@ export default function AdminDashboard() {
             return;
         }
 
-        // Check initial session with error handling
         client.auth.getSession()
             .then(({ data: { session } }) => {
                 if (!isMounted) return;
@@ -114,7 +114,6 @@ export default function AdminDashboard() {
                 setAuthLoading(false);
             });
 
-        // Listen for auth changes
         const { data } = client.auth.onAuthStateChange((_event, session) => {
             if (!isMounted) return;
             if (session?.user) {
@@ -190,14 +189,12 @@ export default function AdminDashboard() {
         }
     };
 
-    // Fetch Data with Promise.all for better performance
     const fetchData = async (pageNum = 0) => {
         setLoading(true);
         const client = getSbClient();
         if (!client) return;
 
         try {
-            // Fetch Teams and Evaluations in parallel
             const [teamsResult, evaluationsResult] = await Promise.all([
                 client.from(TABLES.TEAMS).select('*').order('country', { ascending: true }),
                 client
@@ -207,13 +204,11 @@ export default function AdminDashboard() {
                     .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1)
             ]);
 
-            // Handle Teams
             const currentTeams = teamsResult.data && teamsResult.data.length > 0
                 ? (teamsResult.data as TeamInfo[])
                 : MISSION_TEAMS;
             setTeams(currentTeams);
 
-            // Handle Evaluations
             if (evaluationsResult.error) {
                 showToast(`데이터 로드 실패: ${evaluationsResult.error.message}`, 'error');
             } else {
@@ -239,17 +234,14 @@ export default function AdminDashboard() {
             scaleAverages: []
         };
 
-        // Initialize all teams with 0
         currentTeams.forEach(t => {
             if (t.missionary) newStats.teamMemberByTeam[t.missionary] = 0;
         });
 
-        // 척도 질문 통계를 위한 임시 저장소
         const scaleData: Record<string, { sum: number; count: number }> = {};
         const scaleQuestionIds = getScaleQuestionIds();
 
         data.forEach(evaluation => {
-            // Count by role
             if (evaluation.role === '선교사') {
                 newStats.byRole.missionary++;
                 newStats.missionaries.push(evaluation);
@@ -262,7 +254,6 @@ export default function AdminDashboard() {
                 newStats.teamMemberByTeam[teamKey] = (newStats.teamMemberByTeam[teamKey] || 0) + 1;
             }
 
-            // 척도 질문 점수 집계
             if (evaluation.answers) {
                 Object.entries(evaluation.answers).forEach(([questionId, answer]) => {
                     if (scaleQuestionIds.includes(questionId)) {
@@ -279,7 +270,6 @@ export default function AdminDashboard() {
             }
         });
 
-        // 척도 평균 계산
         newStats.scaleAverages = Object.entries(scaleData)
             .map(([questionId, { sum, count }]) => ({
                 questionId,
@@ -300,7 +290,6 @@ export default function AdminDashboard() {
             if (countryFilter !== 'all' && evaluation.team_country !== countryFilter) return false;
             if (deptFilter !== 'all' && evaluation.team_dept !== deptFilter) return false;
 
-            // 날짜 필터
             if (dateFrom || dateTo) {
                 const evalDate = new Date(evaluation.created_at).toISOString().split('T')[0];
                 if (dateFrom && evalDate < dateFrom) return false;
@@ -319,7 +308,44 @@ export default function AdminDashboard() {
         });
     }, [evaluations, roleFilter, teamFilter, countryFilter, deptFilter, dateFrom, dateTo, searchQuery]);
 
-    // 고유 국가 및 부서 목록
+    const openEvalDetail = useCallback((evaluation: Evaluation, index: number) => {
+        setSelectedEval(evaluation);
+        setSelectedEvalIndex(index);
+    }, []);
+
+    const navigatePrevEval = useCallback(() => {
+        if (selectedEvalIndex > 0) {
+            const newIndex = selectedEvalIndex - 1;
+            setSelectedEval(filteredEvaluations[newIndex]);
+            setSelectedEvalIndex(newIndex);
+        }
+    }, [selectedEvalIndex, filteredEvaluations]);
+
+    const navigateNextEval = useCallback(() => {
+        if (selectedEvalIndex < filteredEvaluations.length - 1) {
+            const newIndex = selectedEvalIndex + 1;
+            setSelectedEval(filteredEvaluations[newIndex]);
+            setSelectedEvalIndex(newIndex);
+        }
+    }, [selectedEvalIndex, filteredEvaluations]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!selectedEval) return;
+            if (e.key === 'ArrowLeft') {
+                navigatePrevEval();
+            } else if (e.key === 'ArrowRight') {
+                navigateNextEval();
+            } else if (e.key === 'Escape') {
+                setSelectedEval(null);
+                setSelectedEvalIndex(-1);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedEval, navigatePrevEval, navigateNextEval]);
+
     const uniqueCountries = useMemo(() =>
         Array.from(new Set(evaluations.map(e => e.team_country).filter(Boolean))).sort(),
         [evaluations]
@@ -330,7 +356,6 @@ export default function AdminDashboard() {
         [evaluations]
     );
 
-    // 척도 질문별 응답 분포 계산
     const scaleDistributions = useMemo(() => {
         const scaleQuestionIds = getScaleQuestionIds();
         const distributions: Record<string, { questionText: string; counts: number[] }> = {};
@@ -338,7 +363,7 @@ export default function AdminDashboard() {
         scaleQuestionIds.forEach(qId => {
             distributions[qId] = {
                 questionText: getQuestionText(qId),
-                counts: [0, 0, 0, 0, 0, 0, 0] // 1~7점
+                counts: [0, 0, 0, 0, 0, 0, 0]
             };
         });
 
@@ -360,7 +385,6 @@ export default function AdminDashboard() {
             .map(([questionId, data]) => ({ questionId, ...data }));
     }, [filteredEvaluations]);
 
-    // 팀별 척도 질문 평균 비교
     const teamComparison = useMemo(() => {
         const scaleQuestionIds = getScaleQuestionIds();
         const teamData: Record<string, { count: number; scores: Record<string, { sum: number; count: number }> }> = {};
@@ -402,7 +426,6 @@ export default function AdminDashboard() {
     }, [filteredEvaluations]);
 
     const exportToExcel = () => {
-        // 기본 정보 + 모든 응답을 질문별로 펼쳐서 내보내기
         const exportData = filteredEvaluations.map(evaluation => {
             const baseInfo: Record<string, string | number> = {
                 '역할': evaluation.role,
@@ -416,10 +439,8 @@ export default function AdminDashboard() {
                 '제출 시각': new Date(evaluation.created_at).toLocaleString('ko-KR')
             };
 
-            // 각 응답을 질문 텍스트를 키로 추가
             Object.entries(evaluation.answers || {}).forEach(([questionId, answer]) => {
                 const questionText = getQuestionText(questionId);
-                // 질문 텍스트가 너무 길면 앞 50자만 사용
                 const shortQuestion = questionText.length > 50 ? questionText.substring(0, 50) + '...' : questionText;
                 baseInfo[shortQuestion] = Array.isArray(answer) ? answer.join(', ') : String(answer);
             });
@@ -428,8 +449,6 @@ export default function AdminDashboard() {
         });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
-
-        // 컬럼 너비 자동 조정
         const colWidths = Object.keys(exportData[0] || {}).map(key => ({
             wch: Math.min(Math.max(key.length, 10), 50)
         }));
@@ -441,28 +460,6 @@ export default function AdminDashboard() {
         showToast('Excel 파일이 다운로드되었습니다.', 'success');
     };
 
-    const deleteEvaluation = async (id: string) => {
-        if (!confirm('이 응답을 삭제하시겠습니까?')) return;
-        const client = getSbClient();
-        if (!client) return;
-
-        const { error, count } = await client
-            .from(TABLES.EVALUATIONS)
-            .delete({ count: 'exact' })
-            .eq('id', id);
-
-        if (error) {
-            showToast('삭제 실패: ' + error.message, 'error');
-        } else if (count === 0) {
-            showToast('삭제된 데이터가 없습니다. 권한이 없거나 이미 삭제되었을 수 있습니다.', 'warning');
-        } else {
-            showToast('삭제되었습니다.', 'success');
-            fetchData(page);
-            setSelectedEval(null);
-        }
-    };
-
-    // Pagination handlers
     const handlePrevPage = () => {
         if (page > 0) {
             const newPage = page - 1;
@@ -481,32 +478,32 @@ export default function AdminDashboard() {
 
     if (authLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-white">
-                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
 
     if (!isAuthorized) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
-                <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-sm text-center border border-gray-100">
-                    <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+                <div className="bg-white p-8 rounded-lg shadow-sm w-full max-w-sm text-center border border-gray-200">
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                     </div>
-                    <h1 className="text-2xl font-black mb-2 text-gray-900">ADMIN ACCESS</h1>
-                    <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                        {user ? `${user.email}은 승인되지 않은 계정입니다.` : '관리자 권한이 있는 구글 계정으로 로그인해 주세요.'}
+                    <h1 className="text-lg font-bold mb-1 text-gray-900">관리자 로그인</h1>
+                    <p className="text-gray-500 text-sm mb-6">
+                        {user ? `${user.email}은 권한이 없습니다.` : '관리자 계정으로 로그인해 주세요.'}
                     </p>
                     {!user ? (
-                        <button onClick={handleLogin} className="w-full py-4 bg-white border-2 border-gray-100 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-200 active:scale-95 transition-all shadow-sm">
-                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="" />
-                            <span className="text-gray-700">Sign in with Google</span>
+                        <button onClick={handleLogin} className="w-full py-3 bg-white border border-gray-200 rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors text-sm">
+                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="" />
+                            Google 로그인
                         </button>
                     ) : (
-                        <button onClick={handleLogout} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold hover:bg-black active:scale-95 transition-all">
+                        <button onClick={handleLogout} className="w-full py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm">
                             다른 계정으로 로그인
                         </button>
                     )}
@@ -519,197 +516,92 @@ export default function AdminDashboard() {
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 font-sans">
-            {/* Toast Container */}
+        <div className="min-h-screen bg-gray-50 font-sans text-sm">
             <ToastContainer toasts={toasts} onClose={hideToast} />
 
-            {/* Nav - Modern Glassmorphism Style */}
-            <nav className="bg-white/70 backdrop-blur-xl border-b border-white/20 sticky top-0 z-50 shadow-sm shadow-slate-200/50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16">
-                        {/* Left: Logo & Navigation */}
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                    </svg>
-                                </div>
-                                <div className="hidden sm:block">
-                                    <div className="text-sm font-bold text-slate-800">Mission Survey</div>
-                                    <div className="text-[10px] font-medium text-indigo-500 tracking-wide">Admin Dashboard</div>
-                                </div>
-                            </div>
-
-                            {/* Navigation Tabs */}
-                            <div className="hidden md:flex items-center bg-slate-100/80 p-1 rounded-xl">
-                                <a href="/admin/dashboard" className="px-4 py-2 rounded-lg text-sm font-semibold bg-white shadow-sm text-indigo-600 transition-all">
-                                    대시보드
-                                </a>
-                                <a href="/admin/questions" className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-white/50 transition-all">
-                                    문항 관리
-                                </a>
-                            </div>
-                        </div>
-
-                        {/* Right: User Info & Logout */}
-                        <div className="flex items-center gap-4">
-                            <div className="hidden sm:flex flex-col items-end">
-                                <span className="text-xs font-semibold text-slate-700">{user?.email}</span>
-                                <span className="text-[10px] text-slate-400 font-medium">Admin</span>
-                            </div>
-                            <button onClick={handleLogout} className="p-2.5 bg-slate-100/80 text-slate-400 rounded-xl hover:text-rose-500 hover:bg-rose-50 transition-all" title="로그아웃">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                            </button>
-                        </div>
+            {/* Compact Header */}
+            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+                <div className="max-w-screen-xl mx-auto px-4 h-11 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <span className="font-bold text-gray-900">Mission Survey</span>
+                        <nav className="flex items-center gap-1 text-xs">
+                            <a href="/admin/dashboard" className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded font-medium">대시보드</a>
+                            <a href="/admin/responses" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">응답시트</a>
+                            <a href="/admin/questions" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">설정</a>
+                        </nav>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>
+                        <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-red-500" title="로그아웃">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </button>
                     </div>
                 </div>
-            </nav>
+            </header>
 
-            <div className="max-w-7xl mx-auto p-6 lg:p-10 space-y-8">
-                {/* Stats Cards - Modern Glassmorphism */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="group relative bg-white/60 backdrop-blur-sm rounded-2xl p-5 border border-white/80 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
-                                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                </div>
-                            </div>
-                            <div className="text-3xl font-black text-slate-800">{totalCount}</div>
-                            <div className="text-xs text-slate-500 mt-1">전체 제출</div>
-                        </div>
+            <main className="max-w-screen-xl mx-auto px-4 py-4">
+                {/* Summary Bar */}
+                <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
+                    <div className="flex items-center gap-6">
+                        <div><span className="text-gray-500">전체</span> <span className="font-bold text-gray-900 ml-1">{totalCount}</span></div>
+                        <div><span className="text-gray-500">선교사</span> <span className="font-semibold text-amber-600 ml-1">{stats.byRole.missionary}</span></div>
+                        <div><span className="text-gray-500">인솔자</span> <span className="font-semibold text-emerald-600 ml-1">{stats.byRole.leader}</span></div>
+                        <div><span className="text-gray-500">팀원</span> <span className="font-semibold text-blue-600 ml-1">{stats.byRole.team_member}</span></div>
                     </div>
-
-                    <div className="group relative bg-white/60 backdrop-blur-sm rounded-2xl p-5 border border-white/80 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 transition-all duration-300 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Missionary</span>
-                                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/30">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                </div>
-                            </div>
-                            <div className="text-3xl font-black text-slate-800">{stats.byRole.missionary}</div>
-                            <div className="text-xs text-slate-500 mt-1">선교사 응답</div>
-                        </div>
-                    </div>
-
-                    <div className="group relative bg-white/60 backdrop-blur-sm rounded-2xl p-5 border border-white/80 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Leader</span>
-                                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </div>
-                            </div>
-                            <div className="text-3xl font-black text-slate-800">{stats.byRole.leader}</div>
-                            <div className="text-xs text-slate-500 mt-1">인솔자 응답</div>
-                        </div>
-                    </div>
-
-                    <div className="group relative bg-white/60 backdrop-blur-sm rounded-2xl p-5 border border-white/80 shadow-sm hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Team</span>
-                                <div className="w-10 h-10 bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/30">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                </div>
-                            </div>
-                            <div className="text-3xl font-black text-slate-800">{stats.byRole.team_member}</div>
-                            <div className="text-xs text-slate-500 mt-1">팀원 응답</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Scale Question Averages - Modern Card */}
-                {stats.scaleAverages.length > 0 && (
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                        <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                </svg>
-                            </div>
-                            척도 질문 평균 점수 (1~7점)
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {stats.scaleAverages.map(stat => (
-                                <div key={stat.questionId} className="p-4 bg-white/80 rounded-xl border border-slate-100 hover:shadow-md transition-all">
-                                    <div className="text-xs text-slate-500 mb-2 line-clamp-2 leading-relaxed" title={stat.questionText}>
-                                        {stat.questionText}
-                                    </div>
-                                    <div className="flex items-end justify-between">
-                                        <div className="text-2xl font-black text-indigo-600">{stat.average.toFixed(1)}</div>
-                                        <div className="text-[10px] text-slate-400 font-medium">{stat.count}명 응답</div>
-                                    </div>
-                                    <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                                            style={{ width: `${(stat.average / 7) * 100}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Analysis Toggle Button - Modern Style */}
-                <div className="flex justify-center">
+                    <div className="flex-1" />
                     <button
                         onClick={() => setShowAnalysis(!showAnalysis)}
-                        className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${showAnalysis
-                            ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
-                            : 'bg-white/60 backdrop-blur-sm border border-indigo-200/50 text-indigo-600 hover:bg-indigo-50/50 hover:shadow-md'}`}
+                        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${showAnalysis ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        {showAnalysis ? '상세 분석 숨기기' : '상세 분석 보기'}
+                        {showAnalysis ? '분석 닫기' : '통계 분석'}
+                    </button>
+                    <button onClick={exportToExcel} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors">
+                        Excel 내보내기
                     </button>
                 </div>
 
-                {/* Detailed Analysis Section */}
+                {/* Analysis Panel */}
                 {showAnalysis && (
-                    <div className="space-y-6">
-                        {/* Score Distribution Histograms */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 space-y-4">
+                        {/* Scale Averages */}
+                        {stats.scaleAverages.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-gray-700 mb-2">척도 질문 평균 (1~7점)</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                    {stats.scaleAverages.map(stat => (
+                                        <div key={stat.questionId} className="p-2 bg-gray-50 rounded border border-gray-100">
+                                            <div className="text-[10px] text-gray-500 truncate mb-1" title={stat.questionText}>{stat.questionText}</div>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-lg font-bold text-gray-900">{stat.average.toFixed(1)}</span>
+                                                <span className="text-[10px] text-gray-400">({stat.count}명)</span>
+                                            </div>
+                                            <div className="mt-1 h-1 bg-gray-200 rounded-full">
+                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(stat.average / 7) * 100}%` }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Score Distribution */}
                         {scaleDistributions.length > 0 && (
-                            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                                <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/25">
-                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                    </div>
-                                    척도 질문별 응답 분포
-                                </h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {scaleDistributions.map(dist => {
+                            <div>
+                                <h3 className="text-xs font-bold text-gray-700 mb-2">응답 분포</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    {scaleDistributions.slice(0, 6).map(dist => {
                                         const maxCount = Math.max(...dist.counts, 1);
-                                        const total = dist.counts.reduce((a, b) => a + b, 0);
                                         return (
-                                            <div key={dist.questionId} className="p-4 bg-white/80 rounded-xl border border-slate-100">
-                                                <div className="text-xs text-slate-600 mb-4 line-clamp-2" title={dist.questionText}>
-                                                    {dist.questionText}
-                                                </div>
-                                                <div className="flex items-end gap-1 h-20">
+                                            <div key={dist.questionId} className="p-2 bg-gray-50 rounded border border-gray-100">
+                                                <div className="text-[10px] text-gray-500 truncate mb-2" title={dist.questionText}>{dist.questionText}</div>
+                                                <div className="flex items-end gap-0.5 h-10">
                                                     {dist.counts.map((count, idx) => (
-                                                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                                                            <div
-                                                                className="w-full bg-gradient-to-t from-cyan-500 to-teal-400 rounded-t transition-all hover:from-cyan-600 hover:to-teal-500"
-                                                                style={{ height: `${(count / maxCount) * 100}%`, minHeight: count > 0 ? '4px' : '0' }}
-                                                                title={`${idx + 1}점: ${count}명`}
-                                                            />
-                                                            <span className="text-[10px] text-slate-400 font-semibold">{idx + 1}</span>
+                                                        <div key={idx} className="flex-1 flex flex-col items-center">
+                                                            <div className="w-full bg-blue-400 rounded-t" style={{ height: `${(count / maxCount) * 100}%`, minHeight: count > 0 ? '2px' : '0' }} title={`${idx + 1}점: ${count}명`} />
+                                                            <span className="text-[8px] text-gray-400 mt-0.5">{idx + 1}</span>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-2 text-[10px] text-slate-400 text-right font-medium">총 {total}명</div>
                                             </div>
                                         );
                                     })}
@@ -717,410 +609,237 @@ export default function AdminDashboard() {
                             </div>
                         )}
 
-                        {/* Team Comparison Table */}
+                        {/* Team Comparison */}
                         {teamComparison.length > 0 && (
-                            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                                <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-rose-400 to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-rose-500/25">
-                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                        </svg>
-                                    </div>
-                                    팀별 척도 질문 평균 비교
-                                </h2>
-                                <div className="overflow-x-auto rounded-xl border border-slate-100">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-50/80">
-                                            <tr>
-                                                <th className="text-left py-3 px-3 font-semibold text-slate-600 sticky left-0 bg-slate-50/80">팀 (선교사)</th>
-                                                <th className="text-center py-3 px-3 font-semibold text-slate-600">응답수</th>
-                                                {getScaleQuestionIds().slice(0, 6).map(qId => (
-                                                    <th key={qId} className="text-center py-3 px-2 font-medium text-slate-500 min-w-[70px] text-xs" title={getQuestionText(qId)}>
-                                                        {qId}
-                                                    </th>
+                            <div>
+                                <h3 className="text-xs font-bold text-gray-700 mb-2">팀별 비교</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="border-b border-gray-200">
+                                                <th className="text-left py-1.5 px-2 font-medium text-gray-600">팀</th>
+                                                <th className="text-center py-1.5 px-2 font-medium text-gray-600">N</th>
+                                                {getScaleQuestionIds().slice(0, 5).map(qId => (
+                                                    <th key={qId} className="text-center py-1.5 px-2 font-medium text-gray-500" title={getQuestionText(qId)}>{qId}</th>
                                                 ))}
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-50 bg-white">
-                                            {teamComparison.map(row => (
-                                                <tr key={row.team} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="py-3 px-3 font-semibold text-slate-800 sticky left-0 bg-white">{row.team}</td>
-                                                    <td className="py-3 px-3 text-center">
-                                                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-xs bg-rose-100 text-rose-700">
-                                                            {row.responseCount}
-                                                        </span>
-                                                    </td>
-                                                    {getScaleQuestionIds().slice(0, 6).map(qId => {
+                                        <tbody>
+                                            {teamComparison.slice(0, 8).map(row => (
+                                                <tr key={row.team} className="border-b border-gray-50 hover:bg-gray-50">
+                                                    <td className="py-1.5 px-2 font-medium text-gray-800">{row.team}</td>
+                                                    <td className="py-1.5 px-2 text-center text-gray-600">{row.responseCount}</td>
+                                                    {getScaleQuestionIds().slice(0, 5).map(qId => {
                                                         const avg = row.averages[qId];
-                                                        const bgColor = avg === null ? 'bg-slate-100 text-slate-400' :
-                                                            avg >= 6 ? 'bg-emerald-100 text-emerald-700' :
-                                                                avg >= 5 ? 'bg-blue-100 text-blue-700' :
-                                                                    avg >= 4 ? 'bg-amber-100 text-amber-700' :
-                                                                        'bg-rose-100 text-rose-700';
-                                                        return (
-                                                            <td key={qId} className="py-3 px-2 text-center">
-                                                                <span className={`inline-block px-2 py-1 rounded-lg font-semibold text-xs ${bgColor}`}>
-                                                                    {avg !== null ? avg.toFixed(1) : '-'}
-                                                                </span>
-                                                            </td>
-                                                        );
+                                                        const color = avg === null ? 'text-gray-300' : avg >= 6 ? 'text-emerald-600' : avg >= 5 ? 'text-blue-600' : avg >= 4 ? 'text-amber-600' : 'text-red-600';
+                                                        return <td key={qId} className={`py-1.5 px-2 text-center font-medium ${color}`}>{avg !== null ? avg.toFixed(1) : '-'}</td>;
                                                     })}
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="mt-4 flex flex-wrap gap-3 text-[10px] text-slate-500">
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-emerald-100 rounded"></span> 6점 이상</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-blue-100 rounded"></span> 5~6점</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-amber-100 rounded"></span> 4~5점</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-rose-100 rounded"></span> 4점 미만</span>
-                                </div>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Team Member Breakdown */}
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                        <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-violet-400 to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/25">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
-                            </div>
-                            팀원별 제출 현황
-                        </h2>
-                        <div className="overflow-x-auto rounded-xl border border-slate-100">
-                            <table className="w-full">
-                                <thead className="bg-slate-50/80">
-                                    <tr>
-                                        <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">팀 (선교사)</th>
-                                        <th className="text-center py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">제출 수</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 bg-white">
-                                    {teams.map((team) => {
-                                        const count = stats.teamMemberByTeam[team.missionary] || 0;
-                                        return (
-                                            <tr key={team.id || `${team.country}-${team.missionary}-${team.leader}`} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="py-3 px-3">
-                                                    <div className="font-semibold text-slate-800 text-sm">{team.missionary}</div>
-                                                    <div className="text-[10px] text-slate-400">{team.country}</div>
-                                                </td>
-                                                <td className="py-3 px-3 text-center">
-                                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-xs ${count > 0 ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-400'}`}>
-                                                        {count}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                {/* Filters */}
+                <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="all">모든 역할</option>
+                            <option value="선교사">선교사</option>
+                            <option value="인솔자">인솔자</option>
+                            <option value="단기선교 팀원">단기선교 팀원</option>
+                        </select>
+                        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="all">모든 팀</option>
+                            {uniqueTeams.map(team => <option key={team} value={team!}>{team}</option>)}
+                        </select>
+                        <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="all">모든 국가</option>
+                            {uniqueCountries.map(c => <option key={c} value={c!}>{c}</option>)}
+                        </select>
+                        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="all">모든 부서</option>
+                            {uniqueDepts.map(d => <option key={d} value={d!}>{d}</option>)}
+                        </select>
+                        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <span className="text-gray-300">~</span>
+                        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <input type="text" placeholder="검색..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32" />
+                        <button onClick={() => { setRoleFilter('all'); setTeamFilter('all'); setCountryFilter('all'); setDeptFilter('all'); setDateFrom(''); setDateTo(''); setSearchQuery(''); }} className="text-xs text-gray-400 hover:text-gray-600 px-2">초기화</button>
+                        <div className="flex-1" />
+                        <span className="text-xs text-gray-500">
+                            <span className="font-semibold text-gray-700">{filteredEvaluations.length}</span> / {totalCount}건
+                        </span>
                     </div>
+                </div>
 
-                    {/* Missionary & Leader Breakdown */}
-                    <div className="space-y-6">
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    {/* Left Sidebar - Team/Role Summary */}
+                    <div className="lg:col-span-1 space-y-4">
+                        {/* Team Breakdown */}
+                        <div className="bg-white border border-gray-200 rounded-lg">
+                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">팀별 제출</div>
+                            <div className="max-h-48 overflow-y-auto">
+                                {teams.map(team => {
+                                    const count = stats.teamMemberByTeam[team.missionary] || 0;
+                                    return (
+                                        <div key={team.id || team.missionary} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                                            <span className="text-gray-700 truncate flex-1" title={team.missionary}>{team.missionary}</span>
+                                            <span className={`font-medium ${count > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{count}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {/* Missionary List */}
-                        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/25">
-                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                </div>
-                                선교사 제출 명단
-                            </h2>
-                            {stats.missionaries.length > 0 ? (
-                                <ul className="space-y-2">
-                                    {stats.missionaries.map(m => (
-                                        <li key={m.id} className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl border border-amber-100/50">
-                                            <div>
-                                                <div className="font-semibold text-slate-800 text-sm">{m.respondent_name || '익명'}</div>
-                                                <div className="text-[10px] text-slate-400">{m.submission_date ? new Date(m.submission_date).toLocaleDateString('ko-KR') : '-'}</div>
-                                            </div>
-                                            <button onClick={() => setSelectedEval(m)} className="text-xs font-semibold text-amber-600 hover:text-amber-700 px-3 py-1.5 bg-amber-100/50 rounded-lg hover:bg-amber-100 transition-colors">보기</button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-center text-slate-400 text-sm py-6">아직 제출된 응답이 없습니다.</p>
-                            )}
+                        <div className="bg-white border border-gray-200 rounded-lg">
+                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">선교사 ({stats.missionaries.length})</div>
+                            <div className="max-h-36 overflow-y-auto">
+                                {stats.missionaries.length > 0 ? stats.missionaries.map(m => {
+                                    const idx = filteredEvaluations.findIndex(e => e.id === m.id);
+                                    return (
+                                        <div key={m.id} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                                            <span className="text-gray-700">{m.respondent_name || '익명'}</span>
+                                            <button onClick={() => openEvalDetail(m, idx >= 0 ? idx : 0)} className="text-blue-500 hover:text-blue-700 text-[10px]">보기</button>
+                                        </div>
+                                    );
+                                }) : <div className="px-3 py-3 text-center text-gray-400 text-xs">없음</div>}
+                            </div>
                         </div>
 
                         {/* Leader List */}
-                        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                        <div className="bg-white border border-gray-200 rounded-lg">
+                            <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">인솔자 ({stats.leaders.length})</div>
+                            <div className="max-h-36 overflow-y-auto">
+                                {stats.leaders.length > 0 ? stats.leaders.map(l => {
+                                    const idx = filteredEvaluations.findIndex(e => e.id === l.id);
+                                    return (
+                                        <div key={l.id} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                                            <span className="text-gray-700">{l.respondent_name || '익명'}</span>
+                                            <button onClick={() => openEvalDetail(l, idx >= 0 ? idx : 0)} className="text-blue-500 hover:text-blue-700 text-[10px]">보기</button>
+                                        </div>
+                                    );
+                                }) : <div className="px-3 py-3 text-center text-gray-400 text-xs">없음</div>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Table */}
+                    <div className="lg:col-span-3">
+                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            {loading ? (
+                                <div className="flex items-center justify-center py-20">
+                                    <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
                                 </div>
-                                인솔자 제출 명단
-                            </h2>
-                            {stats.leaders.length > 0 ? (
-                                <ul className="space-y-2">
-                                    {stats.leaders.map(l => (
-                                        <li key={l.id} className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50">
-                                            <div>
-                                                <div className="font-semibold text-slate-800 text-sm">{l.respondent_name || '익명'}</div>
-                                                <div className="text-[10px] text-slate-400">{l.submission_date ? new Date(l.submission_date).toLocaleDateString('ko-KR') : '-'}</div>
-                                            </div>
-                                            <button onClick={() => setSelectedEval(l)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 px-3 py-1.5 bg-emerald-100/50 rounded-lg hover:bg-emerald-100 transition-colors">보기</button>
-                                        </li>
-                                    ))}
-                                </ul>
                             ) : (
-                                <p className="text-center text-slate-400 text-sm py-6">아직 제출된 응답이 없습니다.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Responses Table */}
-                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/80 shadow-sm">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            </div>
-                            상세 응답 목록
-                        </h2>
-                        <button onClick={exportToExcel} className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-emerald-500/25 active:scale-95 transition-all flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Excel 내보내기
-                        </button>
-                    </div>
-
-                    {/* Filters */}
-                    <div className="space-y-4 mb-6">
-                        {/* Row 1: Role, Team, Search */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="all">모든 역할</option>
-                                <option value="선교사">선교사</option>
-                                <option value="인솔자">인솔자</option>
-                                <option value="단기선교 팀원">단기선교 팀원</option>
-                            </select>
-                            <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="all">모든 팀</option>
-                                {uniqueTeams.map(team => (
-                                    <option key={team} value={team!}>{team}</option>
-                                ))}
-                            </select>
-                            <input type="text" placeholder="검색 (이름, 이메일, 팀)" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400" />
-                        </div>
-
-                        {/* Row 2: Country, Dept, Date Range */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="all">모든 국가</option>
-                                {uniqueCountries.map(country => (
-                                    <option key={country} value={country!}>{country}</option>
-                                ))}
-                            </select>
-                            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="all">모든 부서</option>
-                                {uniqueDepts.map(dept => (
-                                    <option key={dept} value={dept!}>{dept}</option>
-                                ))}
-                            </select>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="date"
-                                    value={dateFrom}
-                                    onChange={e => setDateFrom(e.target.value)}
-                                    className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 flex-1"
-                                    placeholder="시작일"
-                                />
-                                <span className="text-slate-300">~</span>
-                                <input
-                                    type="date"
-                                    value={dateTo}
-                                    onChange={e => setDateTo(e.target.value)}
-                                    className="bg-slate-50 border border-slate-200/50 rounded-xl px-4 py-2.5 font-medium text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 flex-1"
-                                    placeholder="종료일"
-                                />
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setRoleFilter('all');
-                                    setTeamFilter('all');
-                                    setCountryFilter('all');
-                                    setDeptFilter('all');
-                                    setDateFrom('');
-                                    setDateTo('');
-                                    setSearchQuery('');
-                                }}
-                                className="bg-slate-100 text-slate-600 rounded-xl px-4 py-2.5 font-medium text-sm hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                초기화
-                            </button>
-                        </div>
-
-                        {/* Filter Summary */}
-                        <div className="flex items-center gap-2 text-sm text-slate-500 bg-indigo-50/50 rounded-xl px-4 py-2.5 border border-indigo-100/50 w-fit">
-                            <span className="font-medium">결과:</span>
-                            <span className="text-indigo-600 font-bold text-base">{filteredEvaluations.length}</span>
-                            <span className="text-slate-400">/ {totalCount}건</span>
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div className="flex items-center justify-center py-20">
-                            <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="overflow-x-auto rounded-xl border border-slate-100">
-                                <table className="w-full">
-                                    <thead className="bg-slate-50/80">
-                                        <tr>
-                                            <th className="text-left py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">역할</th>
-                                            <th className="text-left py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">팀</th>
-                                            <th className="text-left py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">응답자</th>
-                                            <th className="text-left py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">제출일</th>
-                                            <th className="text-center py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">응답수</th>
-                                            <th className="text-right py-3 px-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">액션</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 bg-white">
-                                        {filteredEvaluations.map(evaluation => (
-                                            <tr key={evaluation.id} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="py-3 px-4">
-                                                    <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${evaluation.role === '선교사' ? 'bg-amber-100 text-amber-700' : evaluation.role === '인솔자' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>
-                                                        {evaluation.role}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 px-4 font-semibold text-slate-800 text-sm">{evaluation.team_missionary}</td>
-                                                <td className="py-3 px-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-semibold text-slate-800 text-sm">{evaluation.respondent_name || '익명'}</span>
-                                                        <span className="text-[10px] text-slate-400">{evaluation.respondent_email || '-'}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-3 px-4 text-sm text-slate-600">{evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-'}</td>
-                                                <td className="py-3 px-4 text-center">
-                                                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-xs bg-indigo-100 text-indigo-700">
-                                                        {Object.keys(evaluation.answers || {}).length}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 px-4 text-right">
-                                                    <button onClick={() => setSelectedEval(evaluation)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition-all">
-                                                        상세보기
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                {filteredEvaluations.length === 0 && (
-                                    <div className="text-center py-16 text-slate-400 font-medium">
-                                        응답 데이터가 없습니다.
+                                <>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-gray-50 border-b border-gray-200">
+                                                <tr>
+                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">역할</th>
+                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">팀</th>
+                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">응답자</th>
+                                                    <th className="text-left py-2 px-3 font-medium text-gray-600">제출일</th>
+                                                    <th className="text-center py-2 px-3 font-medium text-gray-600">응답</th>
+                                                    <th className="text-right py-2 px-3 font-medium text-gray-600"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredEvaluations.map((evaluation, index) => (
+                                                    <tr key={evaluation.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => openEvalDetail(evaluation, index)}>
+                                                        <td className="py-2 px-3">
+                                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${evaluation.role === '선교사' ? 'bg-amber-100 text-amber-700' : evaluation.role === '인솔자' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                                {evaluation.role === '단기선교 팀원' ? '팀원' : evaluation.role}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2 px-3 text-gray-700">{evaluation.team_missionary || '-'}</td>
+                                                        <td className="py-2 px-3">
+                                                            <div className="text-gray-800">{evaluation.respondent_name || '익명'}</div>
+                                                            <div className="text-[10px] text-gray-400">{evaluation.respondent_email || ''}</div>
+                                                        </td>
+                                                        <td className="py-2 px-3 text-gray-600">{evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-'}</td>
+                                                        <td className="py-2 px-3 text-center text-gray-600">{Object.keys(evaluation.answers || {}).length}</td>
+                                                        <td className="py-2 px-3 text-right">
+                                                            <button className="text-blue-500 hover:text-blue-700">상세</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        {filteredEvaluations.length === 0 && (
+                                            <div className="text-center py-12 text-gray-400">데이터가 없습니다.</div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
 
-                            {/* Pagination */}
-                            {totalPages > 1 && (
-                                <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-slate-100">
-                                    <button
-                                        onClick={handlePrevPage}
-                                        disabled={page === 0}
-                                        className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 transition-all"
-                                    >
-                                        이전
-                                    </button>
-                                    <span className="text-sm font-semibold text-slate-600">
-                                        {page + 1} / {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={handleNextPage}
-                                        disabled={(page + 1) * pageSize >= totalCount}
-                                        className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 transition-all"
-                                    >
-                                        다음
-                                    </button>
-                                </div>
+                                    {totalPages > 1 && (
+                                        <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-100">
+                                            <button onClick={handlePrevPage} disabled={page === 0} className="px-3 py-1 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">이전</button>
+                                            <span className="text-xs text-gray-500">{page + 1} / {totalPages}</span>
+                                            <button onClick={handleNextPage} disabled={(page + 1) * pageSize >= totalCount} className="px-3 py-1 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">다음</button>
+                                        </div>
+                                    )}
+                                </>
                             )}
-                        </>
-                    )}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </main>
 
-            {/* Detail Modal - Modern Design */}
+            {/* Detail Modal */}
             {selectedEval && (
-                <div
-                    className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                    onClick={() => setSelectedEval(null)}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="modal-title"
-                >
-                    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="sticky top-0 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-                            <h3 id="modal-title" className="text-lg font-bold text-slate-800">응답 상세</h3>
-                            <button
-                                onClick={() => setSelectedEval(null)}
-                                className="p-2 hover:bg-slate-100 rounded-xl transition-all"
-                                aria-label="닫기"
-                            >
-                                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }}>
+                    <div className="bg-white rounded-lg max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-xl" onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <h3 className="font-bold text-gray-900">응답 상세</h3>
+                                <span className="text-xs text-gray-400">{selectedEvalIndex + 1} / {filteredEvaluations.length}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button onClick={navigatePrevEval} disabled={selectedEvalIndex <= 0} className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-30" title="이전 (←)">
+                                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                                <button onClick={navigateNextEval} disabled={selectedEvalIndex >= filteredEvaluations.length - 1} className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-30" title="다음 (→)">
+                                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                                <div className="w-px h-4 bg-gray-200 mx-1" />
+                                <button onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }} className="p-1.5 hover:bg-gray-100 rounded" title="닫기 (Esc)">
+                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="overflow-y-auto max-h-[calc(85vh-56px)]">
                             {/* Meta Info */}
-                            <div className="grid grid-cols-2 gap-4 p-5 bg-slate-50 rounded-xl">
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">역할</div>
-                                    <div className="font-semibold text-slate-800">{selectedEval.role}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">팀</div>
-                                    <div className="font-semibold text-slate-800">{selectedEval.team_missionary}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">국가</div>
-                                    <div className="font-semibold text-slate-800">{selectedEval.team_country}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">부서</div>
-                                    <div className="font-semibold text-slate-800">{selectedEval.team_dept}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">응답자</div>
-                                    <div className="font-semibold text-slate-800">{selectedEval.respondent_name || '익명'}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">제출일</div>
-                                    <div className="font-semibold text-slate-800">{new Date(selectedEval.created_at).toLocaleString('ko-KR')}</div>
-                                </div>
+                            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
+                                <div><span className="text-gray-400 block">역할</span><span className="font-medium text-gray-800">{selectedEval.role}</span></div>
+                                <div><span className="text-gray-400 block">팀</span><span className="font-medium text-gray-800">{selectedEval.team_missionary || '-'}</span></div>
+                                <div><span className="text-gray-400 block">국가</span><span className="font-medium text-gray-800">{selectedEval.team_country || '-'}</span></div>
+                                <div><span className="text-gray-400 block">부서</span><span className="font-medium text-gray-800">{selectedEval.team_dept || '-'}</span></div>
+                                <div><span className="text-gray-400 block">응답자</span><span className="font-medium text-gray-800">{selectedEval.respondent_name || '익명'}</span></div>
+                                <div><span className="text-gray-400 block">제출일</span><span className="font-medium text-gray-800">{new Date(selectedEval.created_at).toLocaleString('ko-KR')}</span></div>
                             </div>
 
                             {/* Answers */}
-                            <div className="space-y-3">
-                                <h4 className="text-base font-bold text-slate-800">응답 내용</h4>
+                            <div className="p-4 space-y-2">
                                 {Object.entries(selectedEval.answers || {}).map(([key, value]) => {
                                     const questionText = getQuestionText(key);
                                     const questionType = getQuestionType(key);
                                     const isScale = questionType === 'scale';
 
                                     return (
-                                        <div key={key} className="p-4 bg-slate-50 rounded-xl">
-                                            <div className="text-xs text-slate-600 mb-2 leading-relaxed">{sanitizeInput(questionText)}</div>
-                                            <div className={`font-semibold ${isScale ? 'text-indigo-600 text-xl' : 'text-slate-800'}`}>
+                                        <div key={key} className="p-3 bg-gray-50 rounded-lg">
+                                            <div className="text-xs text-gray-500 mb-1">{sanitizeInput(questionText)}</div>
+                                            <div className={`font-medium ${isScale ? 'text-blue-600 text-lg' : 'text-gray-800 text-sm'}`}>
                                                 {isScale ? (
-                                                    <span className="flex items-center gap-2">
-                                                        {sanitizeInput(String(value))}
-                                                        <span className="text-xs font-normal text-slate-400">/ 7점</span>
-                                                    </span>
+                                                    <span>{sanitizeInput(String(value))} <span className="text-xs font-normal text-gray-400">/ 7</span></span>
                                                 ) : (
                                                     Array.isArray(value) ? value.map(v => sanitizeInput(String(v))).join(', ') : sanitizeInput(String(value))
                                                 )}
@@ -1130,14 +849,20 @@ export default function AdminDashboard() {
                                 })}
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
-                                <button onClick={() => deleteEvaluation(selectedEval.id)} className="px-5 py-2.5 bg-rose-50 text-rose-600 rounded-xl font-semibold text-sm hover:bg-rose-100 transition-all">
-                                    삭제
-                                </button>
-                                <button onClick={() => setSelectedEval(null)} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-800 transition-all">
-                                    닫기
-                                </button>
+                            {/* Footer */}
+                            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <button onClick={navigatePrevEval} disabled={selectedEvalIndex <= 0} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-30 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                                        이전
+                                    </button>
+                                    <button onClick={navigateNextEval} disabled={selectedEvalIndex >= filteredEvaluations.length - 1} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-30 flex items-center gap-1">
+                                        다음
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                    </button>
+                                    <span className="text-[10px] text-gray-400 ml-2">키보드: ← → Esc</span>
+                                </div>
+                                <button onClick={() => { setSelectedEval(null); setSelectedEvalIndex(-1); }} className="px-4 py-1.5 text-xs bg-gray-900 text-white rounded hover:bg-gray-800">닫기</button>
                             </div>
                         </div>
                     </div>

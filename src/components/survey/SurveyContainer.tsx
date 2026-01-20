@@ -277,7 +277,7 @@ export default function SurveyContainer() {
                 team_dept: selectedTeam?.dept || null,
                 team_country: selectedTeam?.country || null,
                 team_leader: selectedTeam?.leader || null,
-                respondent_name: data.respondent_name || (typeof auth.user?.user_metadata?.full_name === 'string' ? auth.user.user_metadata.full_name : 'Anonymous'),
+                respondent_name: data.respondent_name || (typeof auth.user?.user_metadata?.full_name === 'string' ? auth.user.user_metadata.full_name : '익명'),
                 respondent_email: data.respondent_email || auth.user?.email || '',
                 answers: data.answers
             };
