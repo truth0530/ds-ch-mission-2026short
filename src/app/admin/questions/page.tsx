@@ -160,7 +160,7 @@ export default function AdminQuestionsPage() {
     };
 
     if (authLoading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gray-50"><div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div></div>;
+        return <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50"><div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>;
     }
 
     if (!isAuthorized) {
@@ -174,10 +174,10 @@ export default function AdminQuestionsPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans text-sm">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 font-sans text-sm">
             {/* Notification */}
             {notification.isVisible && (
-                <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[70] px-4 py-2 rounded-lg shadow-lg text-white text-xs font-medium ${notification.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
+                <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl shadow-lg text-white text-xs font-medium backdrop-blur-sm ${notification.type === 'success' ? 'bg-emerald-500/90' : 'bg-red-500/90'}`}>
                     {notification.message}
                 </div>
             )}
@@ -185,34 +185,39 @@ export default function AdminQuestionsPage() {
             {/* Confirm Modal */}
             {confirmModal.isOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} />
-                    <div className="bg-white rounded-lg p-5 max-w-sm w-full shadow-xl relative z-10">
-                        <h3 className="font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
-                        <p className="text-gray-600 text-xs mb-4">{confirmModal.message}</p>
-                        <div className="flex gap-2">
-                            <button onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded text-xs font-medium hover:bg-gray-200">취소</button>
-                            <button onClick={confirmModal.onConfirm} className="flex-1 py-2 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700">확인</button>
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} />
+                    <div className="bg-white/95 backdrop-blur-md rounded-2xl p-6 max-w-sm w-full shadow-2xl relative z-10 border border-white/20">
+                        <h3 className="font-bold text-slate-900 mb-2">{confirmModal.title}</h3>
+                        <p className="text-slate-600 text-xs mb-5">{confirmModal.message}</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium hover:bg-slate-200 transition-colors">취소</button>
+                            <button onClick={confirmModal.onConfirm} className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl text-xs font-medium hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-indigo-500/25">확인</button>
                         </div>
                     </div>
                 </div>
             )}
 
             {/* Header */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-screen-xl mx-auto px-4 h-11 flex items-center justify-between">
+            <header className="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-50 shadow-sm">
+                <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <span className="font-bold text-gray-900">Mission Survey</span>
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            </div>
+                            <span className="font-bold text-slate-800">Settings</span>
+                        </div>
                         <nav className="flex items-center gap-1 text-xs" aria-label="관리자 메뉴">
-                            <Link href="/admin/dashboard" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">대시보드</Link>
-                            <Link href="/admin/responses" className="px-3 py-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-50">응답시트</Link>
-                            <button onClick={() => setActiveTab('questions')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'questions' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>문항</button>
-                            <button onClick={() => setActiveTab('teams')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'teams' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>팀</button>
-                            <button onClick={() => setActiveTab('admins')} className={`px-3 py-1.5 rounded font-medium ${activeTab === 'admins' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>관리자</button>
+                            <Link href="/admin/dashboard" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">대시보드</Link>
+                            <Link href="/admin/responses" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">응답시트</Link>
+                            <button onClick={() => setActiveTab('questions')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'questions' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>문항</button>
+                            <button onClick={() => setActiveTab('teams')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'teams' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>팀</button>
+                            <button onClick={() => setActiveTab('admins')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'admins' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>관리자</button>
                         </nav>
                     </div>
                     <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>
-                        <button onClick={logout} className="text-xs text-gray-400 hover:text-red-500" title="로그아웃" aria-label="로그아웃">
+                        <span className="text-xs text-slate-500 hidden sm:inline">{user?.email}</span>
+                        <button onClick={logout} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="로그아웃" aria-label="로그아웃">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                         </button>
                     </div>
@@ -222,97 +227,100 @@ export default function AdminQuestionsPage() {
             <main className="max-w-screen-xl mx-auto px-4 py-4">
                 <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
                 {activeTab === 'questions' && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-3 flex flex-wrap items-center gap-2">
-                            <select value={questionRoleFilter} onChange={e => setQuestionRoleFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white">
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex flex-wrap items-center gap-3">
+                            <select value={questionRoleFilter} onChange={e => setQuestionRoleFilter(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
                                 <option value="all">모든 역할</option>
                                 <option value="missionary">선교사</option>
                                 <option value="leader">인솔자</option>
                                 <option value="team_member">팀원</option>
                                 <option value="common">공통</option>
                             </select>
-                            <select value={questionTypeFilter} onChange={e => setQuestionTypeFilter(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white">
+                            <select value={questionTypeFilter} onChange={e => setQuestionTypeFilter(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
                                 <option value="all">모든 타입</option>
                                 <option value="scale">척도형</option>
                                 <option value="text">서술형</option>
                                 <option value="multi_select">복수선택</option>
                             </select>
-                            <input type="text" placeholder="검색..." value={questionSearch} onChange={e => setQuestionSearch(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white flex-1 min-w-[150px]" />
-                            <span className="text-xs text-gray-500"><span className="font-semibold text-gray-700">{filteredQuestions.length}</span>개</span>
+                            <div className="relative flex-1 min-w-[150px]">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <input type="text" placeholder="검색..." value={questionSearch} onChange={e => setQuestionSearch(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg pl-9 pr-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" />
+                            </div>
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg"><span className="font-semibold text-slate-700">{filteredQuestions.length}</span>개</span>
                             <div className="flex-1" />
-                            <button onClick={handleLoadInitialData} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">초기 데이터</button>
-                            <button onClick={handleAddQuestion} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">새 문항</button>
+                            <button onClick={handleLoadInitialData} className="px-4 py-2 text-xs bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-medium">초기 데이터</button>
+                            <button onClick={handleAddQuestion} className="px-4 py-2 text-xs bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-indigo-500/25 font-medium">새 문항</button>
                         </div>
 
                         {/* Table */}
-                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
                             {loading ? (
-                                <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div></div>
+                                <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>
                             ) : (
                                 <table className="w-full text-xs" role="table" aria-label="설문 문항 목록">
-                                    <thead className="bg-gray-50 border-b border-gray-200">
+                                    <thead className="bg-slate-50/80 border-b border-slate-100">
                                         <tr>
-                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600 w-20">역할</th>
-                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600 w-20">타입</th>
-                                            <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">문항</th>
-                                            <th scope="col" className="text-center py-2 px-3 font-medium text-gray-600 w-16">상태</th>
-                                            <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600 w-16"><span className="sr-only">작업</span></th>
+                                            <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600 w-20">역할</th>
+                                            <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600 w-20">타입</th>
+                                            <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">문항</th>
+                                            <th scope="col" className="text-center py-3 px-4 font-semibold text-slate-600 w-16">상태</th>
+                                            <th scope="col" className="text-right py-3 px-4 font-semibold text-slate-600 w-16"><span className="sr-only">작업</span></th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-slate-50">
                                         {filteredQuestions.map(q => (
-                                            <tr key={q.id} className={`border-b border-gray-50 hover:bg-gray-50 ${q.is_hidden ? 'opacity-50' : ''}`}>
+                                            <tr key={q.id} className={`hover:bg-indigo-50/30 transition-colors ${q.is_hidden ? 'opacity-50' : ''}`}>
                                                 {editingId === q.id ? (
-                                                    <td colSpan={5} className="p-3">
-                                                        <div className="bg-blue-50 rounded p-3 space-y-2">
-                                                            <div className="flex gap-2">
-                                                                <select value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })} className="text-xs border rounded px-2 py-1.5 bg-white">
+                                                    <td colSpan={5} className="p-4">
+                                                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 space-y-3 border border-indigo-100">
+                                                            <div className="flex gap-2 flex-wrap">
+                                                                <select value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20">
                                                                     <option value="missionary">선교사</option>
                                                                     <option value="leader">인솔자</option>
                                                                     <option value="team_member">팀원</option>
                                                                     <option value="common">공통</option>
                                                                 </select>
-                                                                <select value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value as QuestionType })} className="text-xs border rounded px-2 py-1.5 bg-white">
+                                                                <select value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value as QuestionType })} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20">
                                                                     <option value="scale">척도형</option>
                                                                     <option value="text">서술형</option>
                                                                     <option value="multi_select">복수선택</option>
                                                                 </select>
-                                                                <input type="text" value={editForm.question_text} onChange={e => setEditForm({ ...editForm, question_text: e.target.value })} className="flex-1 text-xs border rounded px-2 py-1.5 bg-white" />
+                                                                <input type="text" value={editForm.question_text} onChange={e => setEditForm({ ...editForm, question_text: e.target.value })} className="flex-1 min-w-[200px] text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20" />
                                                             </div>
                                                             {(editForm.type === 'multi_select' || (q.options && q.options.length > 0)) && (
-                                                                <textarea value={Array.isArray(editForm.options) ? editForm.options.join('\n') : ''} onChange={e => setEditForm({ ...editForm, options: e.target.value.split('\n').filter(l => l.trim()) })} className="w-full text-xs border rounded px-2 py-1.5 bg-white h-16" placeholder="옵션 (줄별)" />
+                                                                <textarea value={Array.isArray(editForm.options) ? editForm.options.join('\n') : ''} onChange={e => setEditForm({ ...editForm, options: e.target.value.split('\n').filter(l => l.trim()) })} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white h-20 focus:ring-2 focus:ring-indigo-500/20" placeholder="옵션 (줄별)" />
                                                             )}
                                                             <div className="flex justify-end gap-2">
-                                                                <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">취소</button>
-                                                                <button onClick={() => handleSaveQuestion(q.id)} className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">저장</button>
+                                                                <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-white/50 rounded-lg transition-colors">취소</button>
+                                                                <button onClick={() => handleSaveQuestion(q.id)} className="px-4 py-2 text-xs bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 shadow-lg shadow-indigo-500/25 font-medium">저장</button>
                                                             </div>
                                                         </div>
                                                     </td>
                                                 ) : (
                                                     <>
-                                                        <td className="py-2 px-3">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${q.role === 'missionary' ? 'bg-amber-100 text-amber-700' : q.role === 'leader' ? 'bg-emerald-100 text-emerald-700' : q.role === 'team_member' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                                                        <td className="py-3 px-4">
+                                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${q.role === 'missionary' ? 'bg-amber-100 text-amber-700' : q.role === 'leader' ? 'bg-emerald-100 text-emerald-700' : q.role === 'team_member' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
                                                                 {q.role === 'missionary' ? '선교사' : q.role === 'leader' ? '인솔자' : q.role === 'team_member' ? '팀원' : '공통'}
                                                             </span>
                                                         </td>
-                                                        <td className="py-2 px-3">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${q.type === 'scale' ? 'bg-purple-100 text-purple-700' : q.type === 'text' ? 'bg-cyan-100 text-cyan-700' : 'bg-pink-100 text-pink-700'}`}>
+                                                        <td className="py-3 px-4">
+                                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${q.type === 'scale' ? 'bg-purple-100 text-purple-700' : q.type === 'text' ? 'bg-cyan-100 text-cyan-700' : 'bg-pink-100 text-pink-700'}`}>
                                                                 {q.type === 'scale' ? '척도' : q.type === 'text' ? '서술' : '복수'}
                                                             </span>
                                                         </td>
-                                                        <td className="py-2 px-3">
-                                                            <div className="text-gray-800 line-clamp-1">{q.question_text}</div>
-                                                            {q.options && q.options.length > 0 && <div className="text-[10px] text-gray-400 truncate">옵션: {q.options.join(', ')}</div>}
+                                                        <td className="py-3 px-4">
+                                                            <div className="text-slate-800 line-clamp-1">{q.question_text}</div>
+                                                            {q.options && q.options.length > 0 && <div className="text-[10px] text-slate-400 truncate mt-0.5">옵션: {q.options.join(', ')}</div>}
                                                         </td>
-                                                        <td className="py-2 px-3 text-center">
-                                                            <button onClick={() => handleToggleHidden(q)} className={`w-8 h-4 rounded-full relative ${q.is_hidden ? 'bg-gray-200' : 'bg-emerald-500'}`} title={q.is_hidden ? '숨김' : '표시'}>
-                                                                <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${q.is_hidden ? 'left-0.5' : 'left-4'}`}></span>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <button onClick={() => handleToggleHidden(q)} className={`w-9 h-5 rounded-full relative transition-colors ${q.is_hidden ? 'bg-slate-200' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`} title={q.is_hidden ? '숨김' : '표시'}>
+                                                                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform ${q.is_hidden ? 'left-0.5' : 'left-4'}`}></span>
                                                             </button>
                                                         </td>
-                                                        <td className="py-2 px-3 text-right">
-                                                            <button onClick={() => { setEditingId(q.id); setEditForm(q); }} className="text-gray-400 hover:text-blue-600" title="수정">
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <button onClick={() => { setEditingId(q.id); setEditForm(q); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="수정">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                             </button>
                                                         </td>
                                                     </>
@@ -322,115 +330,131 @@ export default function AdminQuestionsPage() {
                                     </tbody>
                                 </table>
                             )}
-                            {filteredQuestions.length === 0 && !loading && <div className="text-center py-8 text-gray-400">{questions.length === 0 ? '문항이 없습니다.' : '조건에 맞는 문항이 없습니다.'}</div>}
+                            {filteredQuestions.length === 0 && !loading && <div className="text-center py-12 text-slate-400">{questions.length === 0 ? '문항이 없습니다.' : '조건에 맞는 문항이 없습니다.'}</div>}
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'teams' && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
-                            <span className="text-xs text-gray-500">팀 <span className="font-semibold text-gray-700">{teams.length}</span>개</span>
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex items-center justify-between">
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg">팀 <span className="font-semibold text-slate-700">{teams.length}</span>개</span>
                             <div className="flex gap-2">
-                                <button onClick={handleInitialTeamsLoad} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">초기 데이터</button>
-                                <button onClick={() => { setEditingTeam({} as TeamInfo); setTeamForm({}); }} className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700">새 팀</button>
+                                <button onClick={handleInitialTeamsLoad} className="px-4 py-2 text-xs bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-medium">초기 데이터</button>
+                                <button onClick={() => { setEditingTeam({} as TeamInfo); setTeamForm({}); }} className="px-4 py-2 text-xs bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg shadow-emerald-500/25 font-medium">새 팀</button>
                             </div>
                         </div>
 
                         {/* Edit Form */}
                         {editingTeam !== null && (
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="font-semibold text-gray-800 text-xs mb-3">{editingTeam.id ? '팀 수정' : '새 팀'}</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                                    <input type="text" placeholder="국가" value={teamForm.country || ''} onChange={e => setTeamForm({ ...teamForm, country: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <input type="text" placeholder="팀명 (Dept)" value={teamForm.dept || ''} onChange={e => setTeamForm({ ...teamForm, dept: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <input type="text" placeholder="선교사" value={teamForm.missionary || ''} onChange={e => setTeamForm({ ...teamForm, missionary: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <input type="text" placeholder="팀장" value={teamForm.leader || ''} onChange={e => setTeamForm({ ...teamForm, leader: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <input type="text" placeholder="기간" value={teamForm.period || ''} onChange={e => setTeamForm({ ...teamForm, period: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <input type="text" placeholder="멤버" value={teamForm.members || ''} onChange={e => setTeamForm({ ...teamForm, members: e.target.value })} className="border rounded px-2 py-1.5" />
-                                    <textarea placeholder="설명" value={teamForm.content || ''} onChange={e => setTeamForm({ ...teamForm, content: e.target.value })} className="col-span-full border rounded px-2 py-1.5 h-16" />
+                            <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-5 shadow-lg">
+                                <h3 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                    </div>
+                                    {editingTeam.id ? '팀 수정' : '새 팀'}
+                                </h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                                    <input type="text" placeholder="국가" value={teamForm.country || ''} onChange={e => setTeamForm({ ...teamForm, country: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="팀명 (Dept)" value={teamForm.dept || ''} onChange={e => setTeamForm({ ...teamForm, dept: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="선교사" value={teamForm.missionary || ''} onChange={e => setTeamForm({ ...teamForm, missionary: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="팀장" value={teamForm.leader || ''} onChange={e => setTeamForm({ ...teamForm, leader: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="기간" value={teamForm.period || ''} onChange={e => setTeamForm({ ...teamForm, period: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="멤버" value={teamForm.members || ''} onChange={e => setTeamForm({ ...teamForm, members: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <textarea placeholder="설명" value={teamForm.content || ''} onChange={e => setTeamForm({ ...teamForm, content: e.target.value })} className="col-span-full border border-slate-200 rounded-lg px-3 py-2 bg-white/80 h-20 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
                                 </div>
-                                <div className="flex justify-end gap-2 mt-3">
-                                    <button onClick={() => { setEditingTeam(null); setTeamForm({}); }} className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">취소</button>
-                                    <button onClick={handleSaveTeam} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700">저장</button>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button onClick={() => { setEditingTeam(null); setTeamForm({}); }} className="px-4 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">취소</button>
+                                    <button onClick={handleSaveTeam} className="px-4 py-2 text-xs bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 font-medium">저장</button>
                                 </div>
                             </div>
                         )}
 
                         {/* Table */}
-                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
                             <table className="w-full text-xs" role="table" aria-label="선교 팀 목록">
-                                <thead className="bg-gray-50 border-b border-gray-200">
+                                <thead className="bg-slate-50/80 border-b border-slate-100">
                                     <tr>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">국가</th>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">선교사</th>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">팀장</th>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">기간</th>
-                                        <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">작업</span></th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">국가</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">선교사</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">팀장</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">기간</th>
+                                        <th scope="col" className="text-right py-3 px-4 font-semibold text-slate-600"><span className="sr-only">작업</span></th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="divide-y divide-slate-50">
                                     {teams.map(team => (
-                                        <tr key={team.id || team.missionary} className="border-b border-gray-50 hover:bg-gray-50">
-                                            <td className="py-2 px-3 text-gray-700">{team.country}</td>
-                                            <td className="py-2 px-3 font-medium text-gray-800">{team.missionary || '-'}</td>
-                                            <td className="py-2 px-3 text-gray-600">{team.leader || '-'}</td>
-                                            <td className="py-2 px-3 text-gray-500">{team.period || '-'}</td>
-                                            <td className="py-2 px-3 text-right">
-                                                <button onClick={() => { setEditingTeam(team); setTeamForm(team); }} className="text-gray-400 hover:text-emerald-600">
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        <tr key={team.id || team.missionary} className="hover:bg-emerald-50/30 transition-colors">
+                                            <td className="py-3 px-4">
+                                                <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[10px] font-medium">{team.country}</span>
+                                            </td>
+                                            <td className="py-3 px-4 font-medium text-slate-800">{team.missionary || '-'}</td>
+                                            <td className="py-3 px-4 text-slate-600">{team.leader || '-'}</td>
+                                            <td className="py-3 px-4 text-slate-500">{team.period || '-'}</td>
+                                            <td className="py-3 px-4 text-right">
+                                                <button onClick={() => { setEditingTeam(team); setTeamForm(team); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            {teams.length === 0 && <div className="text-center py-8 text-gray-400">등록된 팀이 없습니다.</div>}
+                            {teams.length === 0 && <div className="text-center py-12 text-slate-400">등록된 팀이 없습니다.</div>}
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'admins' && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-2">
-                            <input type="email" placeholder="이메일 주소" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAdmin()} className="flex-1 text-xs border rounded px-2 py-1.5" />
-                            <button onClick={handleAddAdmin} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">추가</button>
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
+                                <input type="email" placeholder="이메일 주소" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAdmin()} className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-white/80 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all" />
+                            </div>
+                            <button onClick={handleAddAdmin} className="px-5 py-2.5 text-xs bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg shadow-amber-500/25 font-medium">추가</button>
                         </div>
 
                         {/* Table */}
-                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
                             <table className="w-full text-xs" role="table" aria-label="관리자 목록">
-                                <thead className="bg-gray-50 border-b border-gray-200">
+                                <thead className="bg-slate-50/80 border-b border-slate-100">
                                     <tr>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">이메일</th>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">추가일</th>
-                                        <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">추가자</th>
-                                        <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">작업</span></th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">이메일</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">추가일</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">추가자</th>
+                                        <th scope="col" className="text-right py-3 px-4 font-semibold text-slate-600"><span className="sr-only">작업</span></th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="divide-y divide-slate-50">
                                     {admins.map(admin => (
-                                        <tr key={admin.email} className="border-b border-gray-50 hover:bg-gray-50">
-                                            <td className="py-2 px-3">
-                                                <span className="font-medium text-gray-800">{admin.email}</span>
-                                                {admin.email === user?.email && <span className="ml-1 text-[9px] bg-blue-500 text-white px-1 py-0.5 rounded">YOU</span>}
+                                        <tr key={admin.email} className="hover:bg-amber-50/30 transition-colors">
+                                            <td className="py-3 px-4">
+                                                <span className="font-medium text-slate-800">{admin.email}</span>
+                                                {admin.email === user?.email && <span className="ml-2 text-[9px] bg-gradient-to-r from-amber-500 to-orange-500 text-white px-1.5 py-0.5 rounded-md font-semibold">YOU</span>}
                                             </td>
-                                            <td className="py-2 px-3 text-gray-600">{new Date(admin.created_at).toLocaleDateString('ko-KR')}</td>
-                                            <td className="py-2 px-3 text-gray-500">{admin.added_by || '-'}</td>
-                                            <td className="py-2 px-3 text-right">
-                                                <button onClick={() => handleDeleteAdmin(admin.email)} disabled={admin.email === user?.email} className={`px-2 py-1 rounded text-[10px] font-medium ${admin.email === user?.email ? 'bg-gray-100 text-gray-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>해제</button>
+                                            <td className="py-3 px-4 text-slate-600">{new Date(admin.created_at).toLocaleDateString('ko-KR')}</td>
+                                            <td className="py-3 px-4 text-slate-500">{admin.added_by || '-'}</td>
+                                            <td className="py-3 px-4 text-right">
+                                                <button onClick={() => handleDeleteAdmin(admin.email)} disabled={admin.email === user?.email} className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${admin.email === user?.email ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>해제</button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            {admins.length === 0 && <div className="text-center py-8 text-gray-400">등록된 관리자가 없습니다.</div>}
+                            {admins.length === 0 && <div className="text-center py-12 text-slate-400">등록된 관리자가 없습니다.</div>}
                         </div>
 
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-                            관리자로 추가된 이메일은 Google OAuth 로그인 시 대시보드와 설정 페이지에 접근할 수 있습니다.
+                        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-2xl p-4 text-xs text-amber-700 flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <div>
+                                <p className="font-semibold text-amber-800 mb-1">관리자 권한 안내</p>
+                                <p>관리자로 추가된 이메일은 Google OAuth 로그인 시 대시보드와 설정 페이지에 접근할 수 있습니다.</p>
+                            </div>
                         </div>
                     </div>
                 )}
