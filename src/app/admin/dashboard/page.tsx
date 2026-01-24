@@ -5,11 +5,11 @@ import { getSbClient } from '@/lib/supabase';
 import { TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
 import { validateEvaluations } from '@/lib/validators';
-import { MISSION_TEAMS, getQuestionText, getScaleQuestionIds } from '@/lib/surveyData';
+import { MISSION_TEAMS, getQuestionText, getScaleQuestionIds, getTextQuestions } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useRequireAdmin } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
-import { ResponseDetailModal, DashboardFilters, ListModal, Stats, FilterState } from '@/components/dashboard';
+import { ResponseDetailModal, DashboardFilters, ListModal, TextAnswersModal, Stats, FilterState } from '@/components/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminDashboard() {
@@ -72,6 +72,22 @@ export default function AdminDashboard() {
 
     // Toast
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+    // Dashboard Tab
+    const [dashboardTab, setDashboardTab] = useState<'charts' | 'text_answers'>('charts');
+
+    // Text Answers Modal
+    const [textAnswersModal, setTextAnswersModal] = useState<{
+        isOpen: boolean;
+        questionId: string;
+        questionText: string;
+        roleFilter: string;
+    }>({
+        isOpen: false,
+        questionId: '',
+        questionText: '',
+        roleFilter: 'all',
+    });
 
     const showToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
         const id = `toast-${Date.now()}`;
@@ -382,6 +398,79 @@ export default function AdminDashboard() {
             .sort((a, b) => b.average - a.average);
     }, [filteredEvaluations]);
 
+    // 서술형 문항 목록 (응답 개수 포함)
+    const textQuestionsWithCounts = useMemo(() => {
+        const textQuestions = getTextQuestions();
+        return textQuestions.map(q => {
+            let totalCount = 0;
+            let missionaryCount = 0;
+            let leaderCount = 0;
+            let teamMemberCount = 0;
+
+            filteredEvaluations.forEach(evaluation => {
+                const answer = evaluation.answers?.[q.id];
+                if (answer && typeof answer === 'string' && answer.trim()) {
+                    totalCount++;
+                    if (evaluation.role === '선교사') missionaryCount++;
+                    else if (evaluation.role === '인솔자') leaderCount++;
+                    else if (evaluation.role === '단기선교 팀원') teamMemberCount++;
+                }
+            });
+
+            return {
+                ...q,
+                totalCount,
+                missionaryCount,
+                leaderCount,
+                teamMemberCount,
+            };
+        }).filter(q => q.totalCount > 0);
+    }, [filteredEvaluations]);
+
+    // 선택된 문항의 답변 데이터
+    const selectedQuestionAnswers = useMemo(() => {
+        if (!textAnswersModal.isOpen || !textAnswersModal.questionId) return [];
+
+        return filteredEvaluations
+            .filter(evaluation => {
+                const answer = evaluation.answers?.[textAnswersModal.questionId];
+                return answer && typeof answer === 'string' && answer.trim();
+            })
+            .map(evaluation => ({
+                evaluation,
+                answer: String(evaluation.answers?.[textAnswersModal.questionId] || ''),
+            }));
+    }, [filteredEvaluations, textAnswersModal.isOpen, textAnswersModal.questionId]);
+
+    // 선택된 문항의 역할별 답변 수
+    const selectedQuestionRoleCounts = useMemo(() => {
+        const counts = { total: 0, missionary: 0, leader: 0, team_member: 0 };
+        selectedQuestionAnswers.forEach(({ evaluation }) => {
+            counts.total++;
+            if (evaluation.role === '선교사') counts.missionary++;
+            else if (evaluation.role === '인솔자') counts.leader++;
+            else if (evaluation.role === '단기선교 팀원') counts.team_member++;
+        });
+        return counts;
+    }, [selectedQuestionAnswers]);
+
+    const openTextAnswersModal = useCallback((questionId: string, questionText: string) => {
+        setTextAnswersModal({
+            isOpen: true,
+            questionId,
+            questionText,
+            roleFilter: 'all',
+        });
+    }, []);
+
+    const closeTextAnswersModal = useCallback(() => {
+        setTextAnswersModal(prev => ({ ...prev, isOpen: false }));
+    }, []);
+
+    const handleTextAnswersRoleFilter = useCallback((role: string) => {
+        setTextAnswersModal(prev => ({ ...prev, roleFilter: role }));
+    }, []);
+
     if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -418,103 +507,101 @@ export default function AdminDashboard() {
                     uniqueDepts={uniqueDepts as string[]}
                 />
 
-                {/* Summary Cards with Detail Buttons */}
-                <div className="grid grid-cols-4 gap-3 mb-4">
+                {/* Tabs + Summary Cards in one row */}
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                    {/* Dashboard Tabs */}
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setDashboardTab('charts')}
+                            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${dashboardTab === 'charts' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                        >
+                            통계 차트
+                        </button>
+                        <button
+                            onClick={() => setDashboardTab('text_answers')}
+                            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${dashboardTab === 'text_answers' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                        >
+                            주관식 답변보기
+                        </button>
+                    </div>
+
+                    {/* All Summary Cards in one row */}
                     {/* 전체 */}
-                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === 'all' ? 'bg-slate-100 border-slate-400' : 'bg-card'}`}>
-                        <div
-                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                    <div className={`flex items-center rounded-full border overflow-hidden transition-all ${filters.roleFilter === 'all' ? 'bg-slate-100 border-slate-400' : 'bg-white border-slate-200'}`}>
+                        <button
                             onClick={() => handleFilterChange('roleFilter', 'all')}
+                            className="flex items-center gap-6 px-6 py-2 text-xs hover:bg-slate-50 transition-colors"
                         >
-                            <span className="text-xs text-muted-foreground">전체</span>
-                            <span className="text-xl font-bold text-foreground">{filteredEvaluations.length}</span>
-                        </div>
-                        {(filters.roleFilter === 'all') && (
-                            <>
-                                <div className="w-px bg-slate-300" />
-                                <div
-                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-slate-200 transition-colors"
-                                    onClick={showAllResponses}
-                                >
-                                    <span className="text-xs text-slate-600 whitespace-nowrap">상세보기</span>
-                                </div>
-                            </>
-                        )}
+                            <span className="text-muted-foreground">전체</span>
+                            <span className="font-bold text-sm text-foreground">{filteredEvaluations.length}</span>
+                        </button>
+                        <div className="w-px h-5 bg-slate-300" />
+                        <button
+                            onClick={showAllResponses}
+                            className="px-5 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        >
+                            상세보기
+                        </button>
                     </div>
-
                     {/* 선교사 */}
-                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '선교사' ? 'bg-amber-50 border-amber-400' : 'bg-card'}`}>
-                        <div
-                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                    <div className={`flex items-center rounded-full border overflow-hidden transition-all ${filters.roleFilter === '선교사' ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
+                        <button
                             onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '선교사' ? 'all' : '선교사')}
+                            className="flex items-center gap-6 px-6 py-2 text-xs hover:bg-amber-50 transition-colors"
                         >
-                            <span className="text-xs text-muted-foreground">선교사</span>
-                            <span className="text-xl font-bold text-amber-600">{filteredStats.byRole.missionary}</span>
-                        </div>
-                        {(filters.roleFilter === 'all' || filters.roleFilter === '선교사') && filteredStats.byRole.missionary > 0 && (
-                            <>
-                                <div className="w-px bg-amber-200" />
-                                <div
-                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-amber-100 transition-colors"
-                                    onClick={showMissionaryList}
-                                >
-                                    <span className="text-xs text-amber-600 whitespace-nowrap">상세보기</span>
-                                </div>
-                            </>
-                        )}
+                            <span className="text-muted-foreground">선교사</span>
+                            <span className="font-bold text-sm text-amber-600">{filteredStats.byRole.missionary}</span>
+                        </button>
+                        <div className="w-px h-5 bg-amber-300" />
+                        <button
+                            onClick={showMissionaryList}
+                            className="px-5 py-2 text-xs text-amber-500 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+                        >
+                            상세보기
+                        </button>
                     </div>
-
                     {/* 인솔자 */}
-                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '인솔자' ? 'bg-emerald-50 border-emerald-400' : 'bg-card'}`}>
-                        <div
-                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                    <div className={`flex items-center rounded-full border overflow-hidden transition-all ${filters.roleFilter === '인솔자' ? 'bg-emerald-50 border-emerald-400' : 'bg-white border-slate-200'}`}>
+                        <button
                             onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '인솔자' ? 'all' : '인솔자')}
+                            className="flex items-center gap-6 px-6 py-2 text-xs hover:bg-emerald-50 transition-colors"
                         >
-                            <span className="text-xs text-muted-foreground">인솔자</span>
-                            <span className="text-xl font-bold text-emerald-600">{filteredStats.byRole.leader}</span>
-                        </div>
-                        {(filters.roleFilter === 'all' || filters.roleFilter === '인솔자') && filteredStats.byRole.leader > 0 && (
-                            <>
-                                <div className="w-px bg-emerald-200" />
-                                <div
-                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-emerald-100 transition-colors"
-                                    onClick={showLeaderList}
-                                >
-                                    <span className="text-xs text-emerald-600 whitespace-nowrap">상세보기</span>
-                                </div>
-                            </>
-                        )}
+                            <span className="text-muted-foreground">인솔자</span>
+                            <span className="font-bold text-sm text-emerald-600">{filteredStats.byRole.leader}</span>
+                        </button>
+                        <div className="w-px h-5 bg-emerald-300" />
+                        <button
+                            onClick={showLeaderList}
+                            className="px-5 py-2 text-xs text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        >
+                            상세보기
+                        </button>
                     </div>
-
                     {/* 팀원 */}
-                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '단기선교 팀원' ? 'bg-blue-50 border-blue-400' : 'bg-card'}`}>
-                        <div
-                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                    <div className={`flex items-center rounded-full border overflow-hidden transition-all ${filters.roleFilter === '단기선교 팀원' ? 'bg-blue-50 border-blue-400' : 'bg-white border-slate-200'}`}>
+                        <button
                             onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '단기선교 팀원' ? 'all' : '단기선교 팀원')}
+                            className="flex items-center gap-6 px-6 py-2 text-xs hover:bg-blue-50 transition-colors"
                         >
-                            <span className="text-xs text-muted-foreground">팀원</span>
-                            <span className="text-xl font-bold text-blue-600">{filteredStats.byRole.team_member}</span>
-                        </div>
-                        {(filters.roleFilter === 'all' || filters.roleFilter === '단기선교 팀원') && filteredStats.byRole.team_member > 0 && (
-                            <>
-                                <div className="w-px bg-blue-200" />
-                                <div
-                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-blue-100 transition-colors"
-                                    onClick={showTeamMemberList}
-                                >
-                                    <span className="text-xs text-blue-600 whitespace-nowrap">상세보기</span>
-                                </div>
-                            </>
-                        )}
+                            <span className="text-muted-foreground">팀원</span>
+                            <span className="font-bold text-sm text-blue-600">{filteredStats.byRole.team_member}</span>
+                        </button>
+                        <div className="w-px h-5 bg-blue-300" />
+                        <button
+                            onClick={showTeamMemberList}
+                            className="px-5 py-2 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                            상세보기
+                        </button>
                     </div>
                 </div>
 
-                {/* Visualization Area */}
+                {/* Content Area */}
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
                         <div className="w-8 h-8 border-2 border-muted border-t-foreground rounded-full animate-spin"></div>
                     </div>
-                ) : (
+                ) : dashboardTab === 'charts' ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* 척도 평균 순위 */}
                         <Card>
@@ -597,6 +684,62 @@ export default function AdminDashboard() {
                             </CardContent>
                         </Card>
                     </div>
+                ) : (
+                    /* 주관식 답변보기 */
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">주관식 문항 목록</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {textQuestionsWithCounts.length > 0 ? (
+                                <div className="space-y-2">
+                                    {textQuestionsWithCounts.map((q, idx) => (
+                                        <div
+                                            key={q.id}
+                                            className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors"
+                                        >
+                                            <span className="text-sm text-muted-foreground w-6 font-medium">{idx + 1}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm text-foreground line-clamp-2" title={q.text}>
+                                                    {q.text}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-1">
+                                                    <span className="text-xs text-slate-500">
+                                                        답변 <span className="font-semibold text-slate-700">{q.totalCount}</span>개
+                                                    </span>
+                                                    {q.missionaryCount > 0 && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+                                                            선교사 {q.missionaryCount}
+                                                        </span>
+                                                    )}
+                                                    {q.leaderCount > 0 && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">
+                                                            인솔자 {q.leaderCount}
+                                                        </span>
+                                                    )}
+                                                    {q.teamMemberCount > 0 && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                                            팀원 {q.teamMemberCount}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => openTextAnswersModal(q.id, q.text)}
+                                                className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors whitespace-nowrap"
+                                            >
+                                                상세보기
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center text-muted-foreground py-12 text-sm">
+                                    {filters.roleFilter === 'all' ? '답변이 없습니다.' : `${filters.roleFilter} 답변이 없습니다.`}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 )}
             </main>
 
@@ -619,6 +762,18 @@ export default function AdminDashboard() {
                     evaluations={listModalEvaluations}
                     onClose={closeListModal}
                     onViewDetail={handleListItemClick}
+                />
+            )}
+
+            {textAnswersModal.isOpen && (
+                <TextAnswersModal
+                    questionId={textAnswersModal.questionId}
+                    questionText={textAnswersModal.questionText}
+                    answers={selectedQuestionAnswers}
+                    onClose={closeTextAnswersModal}
+                    roleFilter={textAnswersModal.roleFilter}
+                    onRoleFilterChange={handleTextAnswersRoleFilter}
+                    roleCounts={selectedQuestionRoleCounts}
                 />
             )}
         </div>

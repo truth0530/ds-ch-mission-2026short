@@ -193,3 +193,21 @@ export const getScaleQuestionIds = (): string[] => {
         .filter(([, value]) => value.type === 'scale')
         .map(([key]) => key);
 };
+
+/**
+ * 서술형(text) 질문 ID 목록 반환
+ */
+export const getTextQuestionIds = (): string[] => {
+    return Object.entries(QUESTION_MAP)
+        .filter(([, value]) => value.type === 'text')
+        .map(([key]) => key);
+};
+
+/**
+ * 서술형(text) 질문 목록 반환 (ID, text 포함)
+ */
+export const getTextQuestions = (): Array<{ id: string; text: string }> => {
+    return Object.entries(QUESTION_MAP)
+        .filter(([, value]) => value.type === 'text')
+        .map(([id, value]) => ({ id, text: value.text }));
+};
