@@ -223,7 +223,7 @@ export default function ResponsesPage() {
 
     if (authLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+            <div className="flex items-center justify-center min-h-screen bg-white">
                 <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
             </div>
         );
@@ -234,7 +234,7 @@ export default function ResponsesPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 font-sans text-sm">
+        <div className="min-h-screen bg-white font-sans text-sm">
             <AdminHeader
                 activePage="responses"
                 onLogout={logout}
@@ -248,7 +248,7 @@ export default function ResponsesPage() {
                                 placeholder="검색..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                className="w-40 pl-9 pr-3 py-2 text-xs bg-white/80 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                                className="w-40 pl-9 pr-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400"
                             />
                         </div>
                         <button
@@ -269,9 +269,9 @@ export default function ResponsesPage() {
                         <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
                     </div>
                 ) : (
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg overflow-auto" style={{ maxHeight: 'calc(100vh - 70px)' }}>
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
                         <table className="w-max min-w-full text-xs border-collapse" role="table" aria-label="설문 응답 데이터 시트">
-                            <thead className="bg-slate-50/90 backdrop-blur-sm sticky top-0 z-10">
+                            <thead className="bg-slate-50 sticky top-0 z-10">
                                 <tr>
                                     <th
                                         scope="col"
@@ -327,9 +327,9 @@ export default function ResponsesPage() {
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50">
+                            <tbody className="divide-y divide-slate-100">
                                 {sortedData.map((e, idx) => (
-                                    <tr key={e.id} className={`${idx % 2 === 0 ? 'bg-white/40' : 'bg-slate-50/40'} hover:bg-indigo-50/50 transition-colors`}>
+                                    <tr key={e.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} hover:bg-indigo-50 transition-colors`}>
                                         <td className="border-r border-slate-50 px-3 py-2 whitespace-nowrap text-slate-600">
                                             {new Date(e.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                         </td>
@@ -395,7 +395,7 @@ export default function ResponsesPage() {
                             <button
                                 onClick={() => handlePageChange(0)}
                                 disabled={page === 0}
-                                className="p-2 rounded-lg bg-white/60 backdrop-blur-sm border border-white/20 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 title="첫 페이지"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
@@ -403,7 +403,7 @@ export default function ResponsesPage() {
                             <button
                                 onClick={() => handlePageChange(page - 1)}
                                 disabled={page === 0}
-                                className="p-2 rounded-lg bg-white/60 backdrop-blur-sm border border-white/20 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 title="이전 페이지"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -427,7 +427,7 @@ export default function ResponsesPage() {
                                             className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
                                                 page === pageNum
                                                     ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
-                                                    : 'bg-white/60 backdrop-blur-sm border border-white/20 text-slate-600 hover:bg-indigo-50'
+                                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-indigo-50'
                                             }`}
                                         >
                                             {pageNum + 1}
@@ -438,7 +438,7 @@ export default function ResponsesPage() {
                             <button
                                 onClick={() => handlePageChange(page + 1)}
                                 disabled={page >= totalPages - 1}
-                                className="p-2 rounded-lg bg-white/60 backdrop-blur-sm border border-white/20 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 title="다음 페이지"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
@@ -446,7 +446,7 @@ export default function ResponsesPage() {
                             <button
                                 onClick={() => handlePageChange(totalPages - 1)}
                                 disabled={page >= totalPages - 1}
-                                className="p-2 rounded-lg bg-white/60 backdrop-blur-sm border border-white/20 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 title="마지막 페이지"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>

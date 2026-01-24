@@ -160,7 +160,7 @@ export default function AdminQuestionsPage() {
     };
 
     if (authLoading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50"><div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>;
+        return <div className="flex items-center justify-center min-h-screen bg-white"><div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>;
     }
 
     if (!isAuthorized) {
@@ -174,7 +174,7 @@ export default function AdminQuestionsPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 font-sans text-sm">
+        <div className="min-h-screen bg-white font-sans text-sm">
             {/* Notification */}
             {notification.isVisible && (
                 <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl shadow-lg text-white text-xs font-medium backdrop-blur-sm ${notification.type === 'success' ? 'bg-emerald-500/90' : 'bg-red-500/90'}`}>
@@ -198,7 +198,7 @@ export default function AdminQuestionsPage() {
             )}
 
             {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-50 shadow-sm">
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
                 <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
@@ -229,15 +229,15 @@ export default function AdminQuestionsPage() {
                 {activeTab === 'questions' && (
                     <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex flex-wrap items-center gap-3">
-                            <select value={questionRoleFilter} onChange={e => setQuestionRoleFilter(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex flex-wrap items-center gap-3">
+                            <select value={questionRoleFilter} onChange={e => setQuestionRoleFilter(e.target.value)} className="text-xs text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
                                 <option value="all">모든 역할</option>
                                 <option value="missionary">선교사</option>
                                 <option value="leader">인솔자</option>
                                 <option value="team_member">팀원</option>
                                 <option value="common">공통</option>
                             </select>
-                            <select value={questionTypeFilter} onChange={e => setQuestionTypeFilter(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
+                            <select value={questionTypeFilter} onChange={e => setQuestionTypeFilter(e.target.value)} className="text-xs text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all">
                                 <option value="all">모든 타입</option>
                                 <option value="scale">척도형</option>
                                 <option value="text">서술형</option>
@@ -245,7 +245,7 @@ export default function AdminQuestionsPage() {
                             </select>
                             <div className="relative flex-1 min-w-[150px]">
                                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                <input type="text" placeholder="검색..." value={questionSearch} onChange={e => setQuestionSearch(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg pl-9 pr-3 py-2 bg-white/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" />
+                                <input type="text" placeholder="검색..." value={questionSearch} onChange={e => setQuestionSearch(e.target.value)} className="w-full text-xs text-slate-800 border border-slate-300 rounded-lg pl-9 pr-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400" />
                             </div>
                             <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg"><span className="font-semibold text-slate-700">{filteredQuestions.length}</span>개</span>
                             <div className="flex-1" />
@@ -254,12 +254,12 @@ export default function AdminQuestionsPage() {
                         </div>
 
                         {/* Table */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                             {loading ? (
                                 <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>
                             ) : (
                                 <table className="w-full text-xs" role="table" aria-label="설문 문항 목록">
-                                    <thead className="bg-slate-50/80 border-b border-slate-100">
+                                    <thead className="bg-slate-50 border-b border-slate-200">
                                         <tr>
                                             <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600 w-20">역할</th>
                                             <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600 w-20">타입</th>
@@ -338,7 +338,7 @@ export default function AdminQuestionsPage() {
                 {activeTab === 'teams' && (
                     <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex items-center justify-between">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center justify-between">
                             <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg">팀 <span className="font-semibold text-slate-700">{teams.length}</span>개</span>
                             <div className="flex gap-2">
                                 <button onClick={handleInitialTeamsLoad} className="px-4 py-2 text-xs bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-medium">초기 데이터</button>
@@ -348,7 +348,7 @@ export default function AdminQuestionsPage() {
 
                         {/* Edit Form */}
                         {editingTeam !== null && (
-                            <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-5 shadow-lg">
+                            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
                                 <h3 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
                                     <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                                         <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -356,13 +356,13 @@ export default function AdminQuestionsPage() {
                                     {editingTeam.id ? '팀 수정' : '새 팀'}
                                 </h3>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                                    <input type="text" placeholder="국가" value={teamForm.country || ''} onChange={e => setTeamForm({ ...teamForm, country: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <input type="text" placeholder="팀명 (Dept)" value={teamForm.dept || ''} onChange={e => setTeamForm({ ...teamForm, dept: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <input type="text" placeholder="선교사" value={teamForm.missionary || ''} onChange={e => setTeamForm({ ...teamForm, missionary: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <input type="text" placeholder="팀장" value={teamForm.leader || ''} onChange={e => setTeamForm({ ...teamForm, leader: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <input type="text" placeholder="기간" value={teamForm.period || ''} onChange={e => setTeamForm({ ...teamForm, period: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <input type="text" placeholder="멤버" value={teamForm.members || ''} onChange={e => setTeamForm({ ...teamForm, members: e.target.value })} className="border border-slate-200 rounded-lg px-3 py-2 bg-white/80 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
-                                    <textarea placeholder="설명" value={teamForm.content || ''} onChange={e => setTeamForm({ ...teamForm, content: e.target.value })} className="col-span-full border border-slate-200 rounded-lg px-3 py-2 bg-white/80 h-20 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all" />
+                                    <input type="text" placeholder="국가" value={teamForm.country || ''} onChange={e => setTeamForm({ ...teamForm, country: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <input type="text" placeholder="팀명 (Dept)" value={teamForm.dept || ''} onChange={e => setTeamForm({ ...teamForm, dept: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <input type="text" placeholder="선교사" value={teamForm.missionary || ''} onChange={e => setTeamForm({ ...teamForm, missionary: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <input type="text" placeholder="팀장" value={teamForm.leader || ''} onChange={e => setTeamForm({ ...teamForm, leader: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <input type="text" placeholder="기간" value={teamForm.period || ''} onChange={e => setTeamForm({ ...teamForm, period: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <input type="text" placeholder="멤버" value={teamForm.members || ''} onChange={e => setTeamForm({ ...teamForm, members: e.target.value })} className="text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
+                                    <textarea placeholder="설명" value={teamForm.content || ''} onChange={e => setTeamForm({ ...teamForm, content: e.target.value })} className="col-span-full text-slate-800 border border-slate-300 rounded-lg px-3 py-2 bg-white h-20 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all placeholder:text-slate-400" />
                                 </div>
                                 <div className="flex justify-end gap-2 mt-4">
                                     <button onClick={() => { setEditingTeam(null); setTeamForm({}); }} className="px-4 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">취소</button>
@@ -372,9 +372,9 @@ export default function AdminQuestionsPage() {
                         )}
 
                         {/* Table */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                             <table className="w-full text-xs" role="table" aria-label="선교 팀 목록">
-                                <thead className="bg-slate-50/80 border-b border-slate-100">
+                                <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">국가</th>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">선교사</th>
@@ -409,18 +409,18 @@ export default function AdminQuestionsPage() {
                 {activeTab === 'admins' && (
                     <div className="space-y-4">
                         {/* Actions */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg flex items-center gap-3">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center gap-3">
                             <div className="relative flex-1">
                                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
-                                <input type="email" placeholder="이메일 주소" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAdmin()} className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 bg-white/80 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all" />
+                                <input type="email" placeholder="이메일 주소" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAdmin()} className="w-full text-xs text-slate-800 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all placeholder:text-slate-400" />
                             </div>
                             <button onClick={handleAddAdmin} className="px-5 py-2.5 text-xs bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg shadow-amber-500/25 font-medium">추가</button>
                         </div>
 
                         {/* Table */}
-                        <div className="bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                             <table className="w-full text-xs" role="table" aria-label="관리자 목록">
-                                <thead className="bg-slate-50/80 border-b border-slate-100">
+                                <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">이메일</th>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">추가일</th>

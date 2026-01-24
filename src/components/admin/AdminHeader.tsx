@@ -30,7 +30,7 @@ const navGradients: Record<AdminPage, string> = {
 
 export function AdminHeader({ activePage, onLogout, rightContent }: AdminHeaderProps) {
     return (
-        <header className="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-50 shadow-sm">
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
             <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -47,7 +47,7 @@ export function AdminHeader({ activePage, onLogout, rightContent }: AdminHeaderP
                                 className={`px-3 py-1.5 rounded-lg transition-all ${
                                     activePage === item.id
                                         ? `bg-gradient-to-r ${navGradients[item.id]} text-white font-medium shadow-lg`
-                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                 }`}
                                 aria-current={activePage === item.id ? 'page' : undefined}
                             >
