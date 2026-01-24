@@ -22,10 +22,10 @@ export function DashboardSidebar({
             <div className="bg-white border border-gray-200 rounded-lg">
                 <div className="px-3 py-2 border-b border-gray-100 font-semibold text-xs text-gray-700">팀별 제출</div>
                 <div className="max-h-48 overflow-y-auto">
-                    {teams.map(team => {
+                    {teams.map((team, index) => {
                         const count = stats.teamMemberByTeam[team.missionary] || 0;
                         return (
-                            <div key={team.id || team.missionary} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                            <div key={team.id || `team-${index}-${team.missionary}`} className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-50 last:border-0 hover:bg-gray-50">
                                 <span className="text-gray-700 truncate flex-1" title={team.missionary}>{team.missionary}</span>
                                 <span className={`font-medium ${count > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{count}</span>
                             </div>
