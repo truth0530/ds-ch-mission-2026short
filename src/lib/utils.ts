@@ -1,6 +1,12 @@
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
 /**
- * 공통 유틸리티 함수
+ * shadcn/ui 클래스명 조합 유틸리티
  */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 /**
  * 부서명에 따른 배지 색상 반환
@@ -45,16 +51,7 @@ export const formatDateShort = (dateString: string): string => {
 };
 
 /**
- * 클래스명 조합 유틸리티
- */
-export const cn = (...classes: (string | boolean | undefined | null)[]): string => {
-    return classes.filter(Boolean).join(' ');
-};
-
-/**
  * 기간 문자열에서 시작 점수 계산 (정렬용)
- * @param period - "월/일~월/일" 형식의 기간 문자열
- * @returns 정렬을 위한 숫자 점수 (월*100 + 일)
  */
 export const getStartScore = (period: string): number => {
     const match = period.match(/^(\d+)\/(\d+)/);
@@ -64,16 +61,12 @@ export const getStartScore = (period: string): number => {
 
 /**
  * 팀 정렬 함수 (부서 그룹 -> 시작일 순)
- * @param teams - 정렬할 팀 배열
- * @returns 정렬된 팀 배열
  */
 export const sortTeamsByDeptAndDate = <T extends { dept: string; period: string }>(teams: T[]): T[] => {
     return [...teams].sort((a, b) => {
-        // 1. Dept grouping (Korean sort)
         if (a.dept !== b.dept) {
             return a.dept.localeCompare(b.dept, 'ko');
         }
-        // 2. Date sort (Ascending)
         return getStartScore(a.period) - getStartScore(b.period);
     });
 };

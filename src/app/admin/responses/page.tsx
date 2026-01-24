@@ -5,7 +5,7 @@ import { getSbClient } from '@/lib/supabase';
 import { TABLES } from '@/lib/constants';
 import { Question } from '@/lib/surveyData';
 import { useRequireAdmin } from '@/hooks/useAdminAuth';
-import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
+import { AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 import * as XLSX from 'xlsx';
 
 interface Evaluation {
@@ -235,42 +235,49 @@ export default function ResponsesPage() {
 
     return (
         <div className="min-h-screen bg-white font-sans text-sm">
-            <AdminHeader
-                activePage="responses"
-                onLogout={logout}
-                rightContent={
-                    <>
-                        <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg"><span className="font-semibold text-slate-700">{sortedData.length}</span>건</span>
-                        <div className="relative">
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            <input
-                                type="text"
-                                placeholder="검색..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-40 pl-9 pr-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400"
-                            />
+            {/* Header */}
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+                <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            </div>
+                            <span className="font-bold text-slate-800">응답시트</span>
                         </div>
-                        <button
-                            onClick={handleExport}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 transition-all"
-                        >
-                            Excel
+                        <nav className="flex items-center gap-1 text-xs">
+                            <a href="/admin/dashboard" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">대시보드</a>
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium shadow-lg shadow-cyan-500/25">응답시트</span>
+                            <a href="/admin/questions" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">설정</a>
+                        </nav>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-slate-500"><span className="font-semibold text-slate-700">{sortedData.length}</span>건</span>
+                        <div className="relative">
+                            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <input type="text" placeholder="검색" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-32 pl-8 pr-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 placeholder:text-slate-400" />
+                        </div>
+                        <button onClick={handleExport} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors">Excel</button>
+                        <button onClick={logout} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="로그아웃">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                         </button>
-                    </>
-                }
-            />
+                    </div>
+                </div>
+            </header>
 
-            <main className="p-3">
-                <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
+            <main className="max-w-screen-xl mx-auto px-4 py-4">
+                {(authError || dataError) && (
+                    <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
+                )}
 
                 {loading ? (
-                    <div className="flex items-center justify-center py-16">
-                        <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+                    <div className="flex items-center justify-center py-20">
+                        <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
                     </div>
                 ) : (
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-                        <table className="w-max min-w-full text-xs border-collapse" role="table" aria-label="설문 응답 데이터 시트">
+                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse" role="table" aria-label="설문 응답 데이터 시트">
                             <thead className="bg-slate-50 sticky top-0 z-10">
                                 <tr>
                                     <th
@@ -374,84 +381,37 @@ export default function ResponsesPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                         {sortedData.length === 0 && (
                             <div className="text-center py-16 text-slate-400">
                                 {searchTerm ? '검색 결과가 없습니다.' : '응답 데이터가 없습니다.'}
                             </div>
                         )}
-                    </div>
-                )}
 
-                {/* Pagination */}
-                {!loading && totalPages > 1 && (
-                    <div className="mt-4 flex items-center justify-between">
-                        <div className="text-xs text-slate-500">
-                            전체 <span className="font-semibold text-slate-700">{totalCount}</span>건 중{' '}
-                            <span className="font-semibold text-slate-700">{page * PAGE_SIZE + 1}</span> -{' '}
-                            <span className="font-semibold text-slate-700">{Math.min((page + 1) * PAGE_SIZE, totalCount)}</span>건
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => handlePageChange(0)}
-                                disabled={page === 0}
-                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                title="첫 페이지"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-                            </button>
-                            <button
-                                onClick={() => handlePageChange(page - 1)}
-                                disabled={page === 0}
-                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                title="이전 페이지"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                            </button>
-                            <div className="flex items-center gap-1">
-                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                    let pageNum: number;
-                                    if (totalPages <= 5) {
-                                        pageNum = i;
-                                    } else if (page < 3) {
-                                        pageNum = i;
-                                    } else if (page > totalPages - 4) {
-                                        pageNum = totalPages - 5 + i;
-                                    } else {
-                                        pageNum = page - 2 + i;
-                                    }
-                                    return (
-                                        <button
-                                            key={pageNum}
-                                            onClick={() => handlePageChange(pageNum)}
-                                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
-                                                page === pageNum
-                                                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
-                                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-indigo-50'
-                                            }`}
-                                        >
-                                            {pageNum + 1}
-                                        </button>
-                                    );
-                                })}
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                                <div className="text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-700">{page * PAGE_SIZE + 1}</span>-<span className="font-semibold text-slate-700">{Math.min((page + 1) * PAGE_SIZE, totalCount)}</span> / {totalCount}건
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => handlePageChange(0)} disabled={page === 0} className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg disabled:opacity-30 transition-colors" title="첫 페이지">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+                                    </button>
+                                    <button onClick={() => handlePageChange(page - 1)} disabled={page === 0} className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg disabled:opacity-30 transition-colors" title="이전">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                                    </button>
+                                    <span className="px-3 text-xs text-slate-600 font-medium">{page + 1}/{totalPages}</span>
+                                    <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages - 1} className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg disabled:opacity-30 transition-colors" title="다음">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                    </button>
+                                    <button onClick={() => handlePageChange(totalPages - 1)} disabled={page >= totalPages - 1} className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg disabled:opacity-30 transition-colors" title="마지막">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                                    </button>
+                                </div>
                             </div>
-                            <button
-                                onClick={() => handlePageChange(page + 1)}
-                                disabled={page >= totalPages - 1}
-                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                title="다음 페이지"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                            </button>
-                            <button
-                                onClick={() => handlePageChange(totalPages - 1)}
-                                disabled={page >= totalPages - 1}
-                                className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                title="마지막 페이지"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                            </button>
-                        </div>
+                        )}
                     </div>
                 )}
             </main>

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
-import { FilterState } from '@/components/dashboard/types';
+import { FilterState, Stats } from '@/components/dashboard/types';
 
 describe('DashboardFilters', () => {
     const defaultFilters: FilterState = {
@@ -13,8 +13,19 @@ describe('DashboardFilters', () => {
         searchQuery: '',
     };
 
+    const defaultStats: Stats = {
+        total: 100,
+        byRole: { missionary: 10, leader: 20, team_member: 70 },
+        teamMemberByTeam: {},
+        missionaries: [],
+        leaders: [],
+        scaleAverages: [],
+    };
+
     const mockOnFilterChange = jest.fn();
     const mockOnReset = jest.fn();
+    const mockOnToggleAnalysis = jest.fn();
+    const mockOnExport = jest.fn();
 
     const defaultProps = {
         filters: defaultFilters,
@@ -25,6 +36,10 @@ describe('DashboardFilters', () => {
         uniqueDepts: ['부서1', '부서2'],
         filteredCount: 10,
         totalCount: 100,
+        stats: defaultStats,
+        showAnalysis: false,
+        onToggleAnalysis: mockOnToggleAnalysis,
+        onExport: mockOnExport,
     };
 
     beforeEach(() => {
@@ -47,7 +62,7 @@ describe('DashboardFilters', () => {
         render(<DashboardFilters {...defaultProps} />);
 
         expect(screen.getByText('10')).toBeInTheDocument();
-        expect(screen.getByText('/ 100건')).toBeInTheDocument();
+        expect(screen.getByText('/100건')).toBeInTheDocument();
     });
 
     it('calls onFilterChange when role filter changes', () => {
@@ -90,15 +105,40 @@ describe('DashboardFilters', () => {
         render(<DashboardFilters {...defaultProps} />);
 
         const teamSelect = screen.getByLabelText('팀 필터');
-        expect(teamSelect).toContainHTML('팀A');
-        expect(teamSelect).toContainHTML('팀B');
+        expect(teamSelect).toHaveTextContent('팀A');
+        expect(teamSelect).toHaveTextContent('팀B');
     });
 
     it('renders unique countries in dropdown', () => {
         render(<DashboardFilters {...defaultProps} />);
 
         const countrySelect = screen.getByLabelText('국가 필터');
-        expect(countrySelect).toContainHTML('한국');
-        expect(countrySelect).toContainHTML('미국');
+        expect(countrySelect).toHaveTextContent('한국');
+        expect(countrySelect).toHaveTextContent('미국');
+    });
+
+    it('calls onToggleAnalysis when analysis button is clicked', () => {
+        render(<DashboardFilters {...defaultProps} />);
+
+        const analysisButton = screen.getByText('통계분석');
+        fireEvent.click(analysisButton);
+
+        expect(mockOnToggleAnalysis).toHaveBeenCalled();
+    });
+
+    it('calls onExport when export button is clicked', () => {
+        render(<DashboardFilters {...defaultProps} />);
+
+        const exportButton = screen.getByText('Excel');
+        fireEvent.click(exportButton);
+
+        expect(mockOnExport).toHaveBeenCalled();
+    });
+
+    it('displays stats information', () => {
+        render(<DashboardFilters {...defaultProps} />);
+
+        expect(screen.getByText('100')).toBeInTheDocument(); // totalCount
+        expect(screen.getByText('10')).toBeInTheDocument(); // missionary count or filteredCount
     });
 });

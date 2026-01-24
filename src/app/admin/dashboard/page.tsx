@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import { getSbClient } from '@/lib/supabase';
 import { TABLES, PAGINATION_DEFAULTS } from '@/lib/constants';
 import { Evaluation, TeamInfo, ToastMessage } from '@/types';
@@ -10,7 +9,8 @@ import { MISSION_TEAMS, getQuestionText, getScaleQuestionIds } from '@/lib/surve
 import { ToastContainer } from '@/components/ui/Toast';
 import { useRequireAdmin } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
-import { ResponseDetailModal, DashboardFilters, DashboardSidebar, Stats, FilterState } from '@/components/dashboard';
+import { ResponseDetailModal, DashboardFilters, ListModal, Stats, FilterState } from '@/components/dashboard';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminDashboard() {
     const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
@@ -58,12 +58,14 @@ export default function AdminDashboard() {
         });
     }, []);
 
-    // Analysis View Toggle
-    const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
-
     // Detail Modal
     const [selectedEval, setSelectedEval] = useState<Evaluation | null>(null);
     const [selectedEvalIndex, setSelectedEvalIndex] = useState<number>(-1);
+    const [contextEvaluations, setContextEvaluations] = useState<Evaluation[]>([]); // 현재 네비게이션 컨텍스트
+
+    // List Modal
+    const [listModalTitle, setListModalTitle] = useState<string>('');
+    const [listModalEvaluations, setListModalEvaluations] = useState<Evaluation[]>([]);
 
     // Teams
     const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS);
@@ -210,35 +212,87 @@ export default function AdminDashboard() {
         });
     }, [evaluations, filters]);
 
-    const openEvalDetail = useCallback((evaluation: Evaluation, index: number) => {
+    // 필터링된 데이터 기반 역할별 통계
+    const filteredStats = useMemo(() => {
+        const byRole = { missionary: 0, leader: 0, team_member: 0 };
+        const missionaries: Evaluation[] = [];
+        const leaders: Evaluation[] = [];
+
+        filteredEvaluations.forEach(evaluation => {
+            if (evaluation.role === '선교사') {
+                byRole.missionary++;
+                missionaries.push(evaluation);
+            } else if (evaluation.role === '인솔자') {
+                byRole.leader++;
+                leaders.push(evaluation);
+            } else if (evaluation.role === '단기선교 팀원') {
+                byRole.team_member++;
+            }
+        });
+
+        return { byRole, missionaries, leaders };
+    }, [filteredEvaluations]);
+
+    const openEvalDetail = useCallback((evaluation: Evaluation, index: number, context?: Evaluation[]) => {
         setSelectedEval(evaluation);
         setSelectedEvalIndex(index);
-    }, []);
+        setContextEvaluations(context || filteredEvaluations);
+    }, [filteredEvaluations]);
 
     const closeModal = useCallback(() => {
         setSelectedEval(null);
         setSelectedEvalIndex(-1);
+        setContextEvaluations([]);
     }, []);
 
-    const getEvaluationIndex = useCallback((id: string) => {
-        return filteredEvaluations.findIndex(e => e.id === id);
+    const closeListModal = useCallback(() => {
+        setListModalTitle('');
+        setListModalEvaluations([]);
+    }, []);
+
+    const showMissionaryList = useCallback(() => {
+        setListModalTitle('선교사 목록');
+        setListModalEvaluations(filteredStats.missionaries);
+    }, [filteredStats.missionaries]);
+
+    const showLeaderList = useCallback(() => {
+        setListModalTitle('인솔자 목록');
+        setListModalEvaluations(filteredStats.leaders);
+    }, [filteredStats.leaders]);
+
+    const showAllResponses = useCallback(() => {
+        setListModalTitle('전체 응답');
+        setListModalEvaluations(filteredEvaluations);
     }, [filteredEvaluations]);
 
+    const showTeamMemberList = useCallback(() => {
+        const teamMembers = filteredEvaluations.filter(e => e.role === '단기선교 팀원');
+        setListModalTitle('팀원 목록');
+        setListModalEvaluations(teamMembers);
+    }, [filteredEvaluations]);
+
+    const handleListItemClick = useCallback((evaluation: Evaluation, index: number) => {
+        // listModalEvaluations를 컨텍스트로 사용하여 해당 그룹 내에서만 탐색
+        const currentList = [...listModalEvaluations];
+        closeListModal();
+        openEvalDetail(evaluation, index, currentList);
+    }, [closeListModal, listModalEvaluations, openEvalDetail]);
+
     const navigatePrevEval = useCallback(() => {
-        if (selectedEvalIndex > 0) {
+        if (selectedEvalIndex > 0 && contextEvaluations.length > 0) {
             const newIndex = selectedEvalIndex - 1;
-            setSelectedEval(filteredEvaluations[newIndex]);
+            setSelectedEval(contextEvaluations[newIndex]);
             setSelectedEvalIndex(newIndex);
         }
-    }, [selectedEvalIndex, filteredEvaluations]);
+    }, [selectedEvalIndex, contextEvaluations]);
 
     const navigateNextEval = useCallback(() => {
-        if (selectedEvalIndex < filteredEvaluations.length - 1) {
+        if (selectedEvalIndex < contextEvaluations.length - 1 && contextEvaluations.length > 0) {
             const newIndex = selectedEvalIndex + 1;
-            setSelectedEval(filteredEvaluations[newIndex]);
+            setSelectedEval(contextEvaluations[newIndex]);
             setSelectedEvalIndex(newIndex);
         }
-    }, [selectedEvalIndex, filteredEvaluations]);
+    }, [selectedEvalIndex, contextEvaluations]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -295,96 +349,38 @@ export default function AdminDashboard() {
             .map(([questionId, data]) => ({ questionId, ...data }));
     }, [filteredEvaluations]);
 
-    const teamComparison = useMemo(() => {
+    // 필터링된 데이터 기반 척도 평균 계산
+    const filteredScaleAverages = useMemo(() => {
         const scaleQuestionIds = getScaleQuestionIds();
-        const teamData: Record<string, { count: number; scores: Record<string, { sum: number; count: number }> }> = {};
+        const scaleData: Record<string, { sum: number; count: number }> = {};
 
         filteredEvaluations.forEach(evaluation => {
-            const teamKey = evaluation.team_missionary || 'Unknown';
-            if (!teamData[teamKey]) {
-                teamData[teamKey] = { count: 0, scores: {} };
-                scaleQuestionIds.forEach(qId => {
-                    teamData[teamKey].scores[qId] = { sum: 0, count: 0 };
-                });
-            }
-            teamData[teamKey].count++;
-
             if (evaluation.answers) {
                 Object.entries(evaluation.answers).forEach(([questionId, answer]) => {
-                    if (teamData[teamKey].scores[questionId]) {
+                    if (scaleQuestionIds.includes(questionId)) {
                         const score = Number(answer);
                         if (!isNaN(score) && score >= 1 && score <= 7) {
-                            teamData[teamKey].scores[questionId].sum += score;
-                            teamData[teamKey].scores[questionId].count++;
+                            if (!scaleData[questionId]) {
+                                scaleData[questionId] = { sum: 0, count: 0 };
+                            }
+                            scaleData[questionId].sum += score;
+                            scaleData[questionId].count++;
                         }
                     }
                 });
             }
         });
 
-        return Object.entries(teamData)
-            .filter(([, data]) => data.count > 0)
-            .map(([team, data]) => ({
-                team,
-                responseCount: data.count,
-                averages: Object.entries(data.scores).reduce((acc, [qId, { sum, count }]) => {
-                    acc[qId] = count > 0 ? Math.round((sum / count) * 10) / 10 : null;
-                    return acc;
-                }, {} as Record<string, number | null>)
+        return Object.entries(scaleData)
+            .map(([questionId, { sum, count }]) => ({
+                questionId,
+                questionText: getQuestionText(questionId),
+                count,
+                sum,
+                average: count > 0 ? Math.round((sum / count) * 100) / 100 : 0
             }))
-            .sort((a, b) => b.responseCount - a.responseCount);
+            .sort((a, b) => b.average - a.average);
     }, [filteredEvaluations]);
-
-    const exportToExcel = () => {
-        const exportData = filteredEvaluations.map(evaluation => {
-            const baseInfo: Record<string, string | number> = {
-                '역할': evaluation.role,
-                '팀': evaluation.team_missionary || '-',
-                '국가': evaluation.team_country || '-',
-                '부서': evaluation.team_dept || '-',
-                '인솔자': evaluation.team_leader || '-',
-                '응답자 이름': evaluation.respondent_name || '익명',
-                '응답자 이메일': evaluation.respondent_email || '익명',
-                '제출일': evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-',
-                '제출 시각': new Date(evaluation.created_at).toLocaleString('ko-KR')
-            };
-
-            Object.entries(evaluation.answers || {}).forEach(([questionId, answer]) => {
-                const questionText = getQuestionText(questionId);
-                const shortQuestion = questionText.length > 50 ? questionText.substring(0, 50) + '...' : questionText;
-                baseInfo[shortQuestion] = Array.isArray(answer) ? answer.join(', ') : String(answer);
-            });
-
-            return baseInfo;
-        });
-
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const colWidths = Object.keys(exportData[0] || {}).map(key => ({
-            wch: Math.min(Math.max(key.length, 10), 50)
-        }));
-        ws['!cols'] = colWidths;
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, '설문 응답');
-        XLSX.writeFile(wb, `설문응답_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showToast('Excel 파일이 다운로드되었습니다.', 'success');
-    };
-
-    const handlePrevPage = () => {
-        if (page > 0) {
-            const newPage = page - 1;
-            setPage(newPage);
-            fetchData(newPage);
-        }
-    };
-
-    const handleNextPage = () => {
-        if ((page + 1) * pageSize < totalCount) {
-            const newPage = page + 1;
-            setPage(newPage);
-            fetchData(newPage);
-        }
-    };
 
     if (authLoading) {
         return (
@@ -399,7 +395,6 @@ export default function AdminDashboard() {
     }
 
     const uniqueTeams = Array.from(new Set(evaluations.map(e => e.team_missionary))).filter(Boolean);
-    const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans text-sm">
@@ -411,111 +406,8 @@ export default function AdminDashboard() {
                 rightContent={<span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>}
             />
 
-            <main className="max-w-screen-xl mx-auto px-4 py-4">
+            <main className="max-w-screen-xl mx-auto px-4 py-3">
                 <AdminErrorAlert error={authError} onDismiss={clearError} />
-                {/* Summary Bar */}
-                <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-4 text-xs">
-                    <div className="flex items-center gap-6">
-                        <div><span className="text-gray-500">전체</span> <span className="font-bold text-gray-900 ml-1">{totalCount}</span></div>
-                        <div><span className="text-gray-500">선교사</span> <span className="font-semibold text-amber-600 ml-1">{stats.byRole.missionary}</span></div>
-                        <div><span className="text-gray-500">인솔자</span> <span className="font-semibold text-emerald-600 ml-1">{stats.byRole.leader}</span></div>
-                        <div><span className="text-gray-500">팀원</span> <span className="font-semibold text-blue-600 ml-1">{stats.byRole.team_member}</span></div>
-                    </div>
-                    <div className="flex-1" />
-                    <button
-                        onClick={() => setShowAnalysis(!showAnalysis)}
-                        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${showAnalysis ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                        {showAnalysis ? '분석 닫기' : '통계 분석'}
-                    </button>
-                    <button onClick={exportToExcel} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 transition-colors">
-                        Excel 내보내기
-                    </button>
-                </div>
-
-                {/* Analysis Panel */}
-                {showAnalysis && (
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 space-y-4">
-                        {/* Scale Averages */}
-                        {stats.scaleAverages.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-700 mb-2">척도 질문 평균 (1~7점)</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                    {stats.scaleAverages.map(stat => (
-                                        <div key={stat.questionId} className="p-2 bg-gray-50 rounded border border-gray-100">
-                                            <div className="text-[10px] text-gray-500 truncate mb-1" title={stat.questionText}>{stat.questionText}</div>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-lg font-bold text-gray-900">{stat.average.toFixed(1)}</span>
-                                                <span className="text-[10px] text-gray-400">({stat.count}명)</span>
-                                            </div>
-                                            <div className="mt-1 h-1 bg-gray-200 rounded-full">
-                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(stat.average / 7) * 100}%` }} />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Score Distribution */}
-                        {scaleDistributions.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-700 mb-2">응답 분포</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                    {scaleDistributions.slice(0, 6).map(dist => {
-                                        const maxCount = Math.max(...dist.counts, 1);
-                                        return (
-                                            <div key={dist.questionId} className="p-2 bg-gray-50 rounded border border-gray-100">
-                                                <div className="text-[10px] text-gray-500 truncate mb-2" title={dist.questionText}>{dist.questionText}</div>
-                                                <div className="flex items-end gap-0.5 h-10">
-                                                    {dist.counts.map((count, idx) => (
-                                                        <div key={idx} className="flex-1 flex flex-col items-center">
-                                                            <div className="w-full bg-blue-400 rounded-t" style={{ height: `${(count / maxCount) * 100}%`, minHeight: count > 0 ? '2px' : '0' }} title={`${idx + 1}점: ${count}명`} />
-                                                            <span className="text-[8px] text-gray-400 mt-0.5">{idx + 1}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Team Comparison */}
-                        {teamComparison.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-700 mb-2">팀별 비교</h3>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-xs">
-                                        <thead>
-                                            <tr className="border-b border-gray-200">
-                                                <th className="text-left py-1.5 px-2 font-medium text-gray-600">팀</th>
-                                                <th className="text-center py-1.5 px-2 font-medium text-gray-600">N</th>
-                                                {getScaleQuestionIds().slice(0, 5).map(qId => (
-                                                    <th key={qId} className="text-center py-1.5 px-2 font-medium text-gray-500" title={getQuestionText(qId)}>{qId}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {teamComparison.slice(0, 8).map(row => (
-                                                <tr key={row.team} className="border-b border-gray-50 hover:bg-gray-50">
-                                                    <td className="py-1.5 px-2 font-medium text-gray-800">{row.team}</td>
-                                                    <td className="py-1.5 px-2 text-center text-gray-600">{row.responseCount}</td>
-                                                    {getScaleQuestionIds().slice(0, 5).map(qId => {
-                                                        const avg = row.averages[qId];
-                                                        const color = avg === null ? 'text-gray-300' : avg >= 6 ? 'text-emerald-600' : avg >= 5 ? 'text-blue-600' : avg >= 4 ? 'text-amber-600' : 'text-red-600';
-                                                        return <td key={qId} className={`py-1.5 px-2 text-center font-medium ${color}`}>{avg !== null ? avg.toFixed(1) : '-'}</td>;
-                                                    })}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 <DashboardFilters
                     filters={filters}
@@ -524,91 +416,209 @@ export default function AdminDashboard() {
                     uniqueTeams={uniqueTeams as string[]}
                     uniqueCountries={uniqueCountries as string[]}
                     uniqueDepts={uniqueDepts as string[]}
-                    filteredCount={filteredEvaluations.length}
-                    totalCount={totalCount}
                 />
 
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <DashboardSidebar
-                        teams={teams}
-                        stats={stats}
-                        onViewEvaluation={openEvalDetail}
-                        getEvaluationIndex={getEvaluationIndex}
-                    />
-
-                    {/* Main Table */}
-                    <div className="lg:col-span-3">
-                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                            {loading ? (
-                                <div className="flex items-center justify-center py-20">
-                                    <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs" role="table" aria-label="설문 응답 목록">
-                                            <thead className="bg-gray-50 border-b border-gray-200">
-                                                <tr>
-                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">역할</th>
-                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">팀</th>
-                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">응답자</th>
-                                                    <th scope="col" className="text-left py-2 px-3 font-medium text-gray-600">제출일</th>
-                                                    <th scope="col" className="text-center py-2 px-3 font-medium text-gray-600">응답수</th>
-                                                    <th scope="col" className="text-right py-2 px-3 font-medium text-gray-600"><span className="sr-only">상세보기</span></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredEvaluations.map((evaluation, index) => (
-                                                    <tr key={evaluation.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => openEvalDetail(evaluation, index)}>
-                                                        <td className="py-2 px-3">
-                                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${evaluation.role === '선교사' ? 'bg-amber-100 text-amber-700' : evaluation.role === '인솔자' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                                {evaluation.role === '단기선교 팀원' ? '팀원' : evaluation.role}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-2 px-3 text-gray-700">{evaluation.team_missionary || '-'}</td>
-                                                        <td className="py-2 px-3">
-                                                            <div className="text-gray-800">{evaluation.respondent_name || '익명'}</div>
-                                                            <div className="text-[10px] text-gray-400">{evaluation.respondent_email || ''}</div>
-                                                        </td>
-                                                        <td className="py-2 px-3 text-gray-600">{evaluation.submission_date ? new Date(evaluation.submission_date).toLocaleDateString('ko-KR') : '-'}</td>
-                                                        <td className="py-2 px-3 text-center text-gray-600">{Object.keys(evaluation.answers || {}).length}</td>
-                                                        <td className="py-2 px-3 text-right">
-                                                            <button className="text-blue-500 hover:text-blue-700">상세</button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                        {filteredEvaluations.length === 0 && (
-                                            <div className="text-center py-12 text-gray-400">데이터가 없습니다.</div>
-                                        )}
-                                    </div>
-
-                                    {totalPages > 1 && (
-                                        <div className="flex items-center justify-center gap-3 py-3 border-t border-gray-100">
-                                            <button onClick={handlePrevPage} disabled={page === 0} className="px-3 py-1 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">이전</button>
-                                            <span className="text-xs text-gray-500">{page + 1} / {totalPages}</span>
-                                            <button onClick={handleNextPage} disabled={(page + 1) * pageSize >= totalCount} className="px-3 py-1 text-xs text-gray-600 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">다음</button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                {/* Summary Cards with Detail Buttons */}
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                    {/* 전체 */}
+                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === 'all' ? 'bg-slate-100 border-slate-400' : 'bg-card'}`}>
+                        <div
+                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                            onClick={() => handleFilterChange('roleFilter', 'all')}
+                        >
+                            <span className="text-xs text-muted-foreground">전체</span>
+                            <span className="text-xl font-bold text-foreground">{filteredEvaluations.length}</span>
                         </div>
+                        {(filters.roleFilter === 'all') && (
+                            <>
+                                <div className="w-px bg-slate-300" />
+                                <div
+                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-slate-200 transition-colors"
+                                    onClick={showAllResponses}
+                                >
+                                    <span className="text-xs text-slate-600 whitespace-nowrap">상세보기</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* 선교사 */}
+                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '선교사' ? 'bg-amber-50 border-amber-400' : 'bg-card'}`}>
+                        <div
+                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                            onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '선교사' ? 'all' : '선교사')}
+                        >
+                            <span className="text-xs text-muted-foreground">선교사</span>
+                            <span className="text-xl font-bold text-amber-600">{filteredStats.byRole.missionary}</span>
+                        </div>
+                        {(filters.roleFilter === 'all' || filters.roleFilter === '선교사') && filteredStats.byRole.missionary > 0 && (
+                            <>
+                                <div className="w-px bg-amber-200" />
+                                <div
+                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-amber-100 transition-colors"
+                                    onClick={showMissionaryList}
+                                >
+                                    <span className="text-xs text-amber-600 whitespace-nowrap">상세보기</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* 인솔자 */}
+                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '인솔자' ? 'bg-emerald-50 border-emerald-400' : 'bg-card'}`}>
+                        <div
+                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                            onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '인솔자' ? 'all' : '인솔자')}
+                        >
+                            <span className="text-xs text-muted-foreground">인솔자</span>
+                            <span className="text-xl font-bold text-emerald-600">{filteredStats.byRole.leader}</span>
+                        </div>
+                        {(filters.roleFilter === 'all' || filters.roleFilter === '인솔자') && filteredStats.byRole.leader > 0 && (
+                            <>
+                                <div className="w-px bg-emerald-200" />
+                                <div
+                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                                    onClick={showLeaderList}
+                                >
+                                    <span className="text-xs text-emerald-600 whitespace-nowrap">상세보기</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* 팀원 */}
+                    <div className={`flex items-stretch rounded-xl border overflow-hidden transition-all hover:shadow-md ${filters.roleFilter === '단기선교 팀원' ? 'bg-blue-50 border-blue-400' : 'bg-card'}`}>
+                        <div
+                            className="flex-1 px-4 py-2 cursor-pointer flex items-center justify-between"
+                            onClick={() => handleFilterChange('roleFilter', filters.roleFilter === '단기선교 팀원' ? 'all' : '단기선교 팀원')}
+                        >
+                            <span className="text-xs text-muted-foreground">팀원</span>
+                            <span className="text-xl font-bold text-blue-600">{filteredStats.byRole.team_member}</span>
+                        </div>
+                        {(filters.roleFilter === 'all' || filters.roleFilter === '단기선교 팀원') && filteredStats.byRole.team_member > 0 && (
+                            <>
+                                <div className="w-px bg-blue-200" />
+                                <div
+                                    className="px-4 cursor-pointer flex items-center justify-center hover:bg-blue-100 transition-colors"
+                                    onClick={showTeamMemberList}
+                                >
+                                    <span className="text-xs text-blue-600 whitespace-nowrap">상세보기</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
+
+                {/* Visualization Area */}
+                {loading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <div className="w-8 h-8 border-2 border-muted border-t-foreground rounded-full animate-spin"></div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* 척도 평균 순위 */}
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">척도 평균 순위 (1~7점)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {filteredScaleAverages.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {filteredScaleAverages.slice(0, 10).map((stat, idx) => {
+                                            const percentage = (stat.average / 7) * 100;
+                                            const barColor = stat.average >= 6 ? 'bg-emerald-500' : stat.average >= 5 ? 'bg-blue-500' : stat.average >= 4 ? 'bg-amber-500' : 'bg-red-500';
+                                            return (
+                                                <div key={stat.questionId} className="flex items-center gap-3">
+                                                    <span className="text-sm text-muted-foreground w-5 font-medium">{idx + 1}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm text-foreground truncate mb-1" title={stat.questionText}>
+                                                            {stat.questionText}
+                                                        </div>
+                                                        <div className="h-5 bg-muted rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full ${barColor} rounded-full transition-all duration-300`}
+                                                                style={{ width: `${percentage}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right w-16">
+                                                        <span className="text-lg font-bold text-foreground">{stat.average.toFixed(1)}</span>
+                                                        <span className="text-xs text-muted-foreground ml-1">({stat.count})</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-muted-foreground py-12 text-sm">데이터 없음</div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* 점수 분포 차트 */}
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">점수 분포</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {scaleDistributions.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {scaleDistributions.slice(0, 6).map(dist => {
+                                            const maxCount = Math.max(...dist.counts, 1);
+                                            const total = dist.counts.reduce((a, b) => a + b, 0);
+                                            return (
+                                                <div key={dist.questionId}>
+                                                    <div className="text-sm text-foreground truncate mb-2" title={dist.questionText}>
+                                                        {dist.questionText}
+                                                    </div>
+                                                    <div className="flex items-end gap-1 h-12">
+                                                        {dist.counts.map((count, idx) => {
+                                                            const height = (count / maxCount) * 100;
+                                                            const barColor = idx >= 5 ? 'bg-emerald-400' : idx >= 3 ? 'bg-blue-400' : 'bg-amber-400';
+                                                            return (
+                                                                <div key={idx} className="flex-1 flex flex-col items-center">
+                                                                    <div
+                                                                        className={`w-full ${barColor} rounded-t transition-all duration-300`}
+                                                                        style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '0' }}
+                                                                        title={`${idx + 1}점: ${count}명 (${total > 0 ? ((count / total) * 100).toFixed(0) : 0}%)`}
+                                                                    />
+                                                                    <span className="text-xs text-muted-foreground mt-1 font-medium">{idx + 1}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-muted-foreground py-12 text-sm">데이터 없음</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
             </main>
 
             {selectedEval && (
                 <ResponseDetailModal
                     evaluation={selectedEval}
                     index={selectedEvalIndex}
-                    totalCount={filteredEvaluations.length}
+                    totalCount={contextEvaluations.length}
                     onClose={closeModal}
                     onPrev={navigatePrevEval}
                     onNext={navigateNextEval}
                     canGoPrev={selectedEvalIndex > 0}
-                    canGoNext={selectedEvalIndex < filteredEvaluations.length - 1}
+                    canGoNext={selectedEvalIndex < contextEvaluations.length - 1}
+                />
+            )}
+
+            {listModalEvaluations.length > 0 && (
+                <ListModal
+                    title={listModalTitle}
+                    evaluations={listModalEvaluations}
+                    onClose={closeListModal}
+                    onViewDetail={handleListItemClick}
                 />
             )}
         </div>

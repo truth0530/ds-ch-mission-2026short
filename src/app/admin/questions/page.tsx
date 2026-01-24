@@ -210,9 +210,7 @@ export default function AdminQuestionsPage() {
                         <nav className="flex items-center gap-1 text-xs" aria-label="관리자 메뉴">
                             <Link href="/admin/dashboard" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">대시보드</Link>
                             <Link href="/admin/responses" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">응답시트</Link>
-                            <button onClick={() => setActiveTab('questions')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'questions' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>문항</button>
-                            <button onClick={() => setActiveTab('teams')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'teams' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>팀</button>
-                            <button onClick={() => setActiveTab('admins')} className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'admins' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>관리자</button>
+                            <span className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/25">설정</span>
                         </nav>
                     </div>
                     <div className="flex items-center gap-3">
@@ -226,6 +224,29 @@ export default function AdminQuestionsPage() {
 
             <main className="max-w-screen-xl mx-auto px-4 py-4">
                 <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
+
+                {/* Sub-tabs for Settings */}
+                <div className="flex items-center gap-1 mb-4 border-b border-slate-200 pb-3">
+                    <button
+                        onClick={() => setActiveTab('questions')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'questions' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                    >
+                        문항관리
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('teams')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'teams' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                    >
+                        팀관리
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('admins')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'admins' ? 'bg-amber-100 text-amber-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                    >
+                        관리자
+                    </button>
+                </div>
+
                 {activeTab === 'questions' && (
                     <div className="space-y-4">
                         {/* Actions */}
