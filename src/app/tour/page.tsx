@@ -33,8 +33,6 @@ function MaterialIcon({ name, className = '', filled = false }: { name: string; 
 
 interface ReservationForm {
     name: string;
-    phone: string;
-    email: string;
     memo: string;
 }
 
@@ -43,7 +41,7 @@ export default function TourPage() {
     const [loading, setLoading] = useState(true);
     const [selectedSlot, setSelectedSlot] = useState<TourSlot | null>(null);
     const [leaders, setLeaders] = useState<TourLeader[]>([]);
-    const [form, setForm] = useState<ReservationForm>({ name: '', phone: '', email: '', memo: '' });
+    const [form, setForm] = useState<ReservationForm>({ name: '', memo: '' });
     const [leaderQuery, setLeaderQuery] = useState('');
     const [selectedLeader, setSelectedLeader] = useState<TourLeader | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -109,8 +107,6 @@ export default function TourPage() {
                 body: JSON.stringify({
                     slot_id: selectedSlot.id,
                     name: selectedLeader.name,
-                    phone: form.phone,
-                    email: form.email || undefined,
                     memo: form.memo || undefined,
                 }),
             });
@@ -118,7 +114,7 @@ export default function TourPage() {
             if (!res.ok) { setError(json.error || '신청에 실패했습니다'); return; }
             setResult(json.data);
             setSelectedSlot(null);
-            setForm({ name: '', phone: '', email: '', memo: '' });
+            setForm({ name: '', memo: '' });
             setLeaderQuery('');
             setSelectedLeader(null);
             fetchSlots();
@@ -351,32 +347,6 @@ export default function TourPage() {
                                                 </div>
                                             </div>
                                         )}
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-slate-700 text-sm font-semibold px-1">연락처</label>
-                                            <input
-                                                type="tel"
-                                                value={form.phone}
-                                                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                                                className="w-full px-4 h-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-[#6d13ec] focus:border-[#6d13ec] placeholder:text-slate-400 text-sm"
-                                                placeholder="010-0000-0000"
-                                                required
-                                                maxLength={20}
-                                            />
-                                        </div>
-                                        <div className="flex flex-col gap-1.5">
-                                            <div className="flex justify-between items-center px-1">
-                                                <label className="text-slate-700 text-sm font-semibold">이메일</label>
-                                                <span className="text-slate-400 text-xs">선택사항</span>
-                                            </div>
-                                            <input
-                                                type="email"
-                                                value={form.email}
-                                                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                                                className="w-full px-4 h-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-[#6d13ec] focus:border-[#6d13ec] placeholder:text-slate-400 text-sm"
-                                                placeholder="example@email.com"
-                                                maxLength={100}
-                                            />
-                                        </div>
                                         <div className="flex flex-col gap-1.5">
                                             <div className="flex justify-between items-center px-1">
                                                 <label className="text-slate-700 text-sm font-semibold">메모</label>

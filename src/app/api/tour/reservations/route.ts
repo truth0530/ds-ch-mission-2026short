@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getServerSupabaseClient, getRequestIp } from '@/lib/supabase-server';
 import { formatTourReservation, toPublicReservation } from '@/lib/tour';
-import { isValidEmail, sanitizeInput } from '@/lib/validators';
+import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationRpcRow } from '@/types';
-
-function isValidPhone(phone: string): boolean {
-    return /^[\d\-\s()+ ]{8,20}$/.test(phone);
-}
 
 // POST: 새 예약 생성
 export async function POST(request: NextRequest) {
@@ -23,14 +19,13 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { slot_id, name, phone, email, memo } = body;
+        const { slot_id, name, memo } = body;
 
-        if (!slot_id || !name || !phone) {
-            return NextResponse.json({ error: '필수 항목을 입력해주세요 (이름, 연락처)' }, { status: 400 });
+        if (!slot_id || !name) {
+            return NextResponse.json({ error: '필수 항목을 입력해주세요' }, { status: 400 });
         }
 
         const cleanName = sanitizeInput(name.trim());
-        const cleanPhone = sanitizeInput(phone.trim());
 
         if (cleanName.length < 2) {
             return NextResponse.json({ error: '조장 이름을 선택해주세요' }, { status: 400 });
@@ -51,20 +46,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '조장 목록에서 이름을 선택해주세요' }, { status: 400 });
         }
 
-        if (!isValidPhone(cleanPhone)) {
-            return NextResponse.json({ error: '올바른 연락처를 입력해주세요' }, { status: 400 });
-        }
-
-        const cleanEmail = email ? sanitizeInput(email.trim()) : null;
-        if (cleanEmail && !isValidEmail(cleanEmail)) {
-            return NextResponse.json({ error: '올바른 이메일을 입력해주세요' }, { status: 400 });
-        }
-
         const { data: reservation, error } = await client.rpc('create_tour_reservation', {
             p_slot_id: slot_id,
             p_name: cleanName,
-            p_phone: cleanPhone,
-            p_email: cleanEmail,
+            p_phone: null,
+            p_email: null,
             p_memo: memo ? sanitizeInput(memo.trim()) : null,
         });
 
