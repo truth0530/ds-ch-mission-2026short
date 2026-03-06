@@ -108,4 +108,4 @@ export interface ApiResponse<T> {
 }
 
 // Tour types
-export type { TourSlot, TourReservation, TourReservationWithSlot, TourReservationForm, TourLookupForm } from './tour';
+export type { TourSlot, TourReservation, TourReservationWithSlot, TourReservationForm, TourLookupForm, TourReservationAdminView, TourReservationManageView, TourReservationPublicView, TourReservationRpcRow, TourLeader } from './tour';

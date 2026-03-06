@@ -1,17 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { ENV_CONFIG, TABLES } from '@/lib/constants';
-
-function getServerClient() {
-    const supabaseUrl = ENV_CONFIG.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ENV_CONFIG.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return null;
-    return createClient(supabaseUrl, supabaseKey);
-}
+import { TABLES } from '@/lib/constants';
+import { getServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function GET() {
     try {
-        const client = getServerClient();
+        const client = getServerSupabaseClient();
         if (!client) {
             return NextResponse.json({ error: 'DB 연결 실패' }, { status: 500 });
         }

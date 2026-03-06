@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import type { TourSlot, TourReservationWithSlot } from '@/types';
+import { useSearchParams } from 'next/navigation';
+import { TourLeaderAutocomplete } from '@/components/tour/TourLeaderAutocomplete';
+import { formatTourLeaderLabel, getTourLeaderByName, getTourLeaderByQuery } from '@/lib/tour-leaders';
+import type { TourLeader, TourReservationManageView, TourSlot } from '@/types';
 
 function formatDate(dateStr: string): string {
     const date = new Date(dateStr + 'T00:00:00');
@@ -16,15 +19,27 @@ function formatDate(dateStr: string): string {
 type ViewMode = 'lookup' | 'detail' | 'change';
 
 export default function TourMyPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+            <TourMyContent />
+        </Suspense>
+    );
+}
+
+function TourMyContent() {
+    const searchParams = useSearchParams();
     const [view, setView] = useState<ViewMode>('lookup');
     const [code, setCode] = useState('');
-    const [name, setName] = useState('');
+    const [token, setToken] = useState('');
+    const [leaderQuery, setLeaderQuery] = useState('');
+    const [selectedLeader, setSelectedLeader] = useState<TourLeader | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [reservation, setReservation] = useState<TourReservationWithSlot | null>(null);
+    const [reservation, setReservation] = useState<TourReservationManageView | null>(null);
     const [message, setMessage] = useState<string | null>(null);
 
     // 날짜 변경용
+    const [leaders, setLeaders] = useState<TourLeader[]>([]);
     const [slots, setSlots] = useState<TourSlot[]>([]);
     const [selectedNewSlot, setSelectedNewSlot] = useState<string | null>(null);
     const [changing, setChanging] = useState(false);
@@ -35,12 +50,37 @@ export default function TourMyPage() {
         if (json.data) setSlots(json.data);
     }, []);
 
+    const fetchLeaders = useCallback(async () => {
+        const res = await fetch('/api/tour/leaders');
+        const json = await res.json();
+        if (json.data) setLeaders(json.data);
+    }, []);
+
     useEffect(() => {
         fetchSlots();
-    }, [fetchSlots]);
+        fetchLeaders();
+    }, [fetchLeaders, fetchSlots]);
+
+    useEffect(() => {
+        const initialCode = searchParams.get('code');
+        const initialToken = searchParams.get('token');
+        const initialName = searchParams.get('name');
+
+        if (initialCode) setCode(initialCode);
+        if (initialToken) setToken(initialToken);
+        if (initialName) {
+            const leader = getTourLeaderByName(leaders, initialName);
+            setSelectedLeader(leader);
+            setLeaderQuery(leader ? formatTourLeaderLabel(leader) : initialName);
+        }
+    }, [leaders, searchParams]);
 
     const handleLookup = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedLeader) {
+            setError('조/조장명을 검색해서 목록에서 선택해주세요');
+            return;
+        }
         setLoading(true);
         setError(null);
         setMessage(null);
@@ -49,7 +89,7 @@ export default function TourMyPage() {
             const res = await fetch('/api/tour/reservations/lookup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reservation_code: code, name }),
+                body: JSON.stringify({ reservation_code: code, manage_token: token, name: selectedLeader.name }),
             });
 
             const json = await res.json();
@@ -75,10 +115,15 @@ export default function TourMyPage() {
         setError(null);
 
         try {
-            const res = await fetch(`/api/tour/reservations/${reservation.id}`, {
-                method: 'PATCH',
+            const res = await fetch('/api/tour/reservations/manage', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'cancel' }),
+                body: JSON.stringify({
+                    action: 'cancel',
+                    reservation_code: reservation.reservation_code,
+                    manage_token: reservation.manage_token,
+                    name: reservation.name,
+                }),
             });
 
             const json = await res.json();
@@ -104,10 +149,16 @@ export default function TourMyPage() {
         setError(null);
 
         try {
-            const res = await fetch(`/api/tour/reservations/${reservation.id}`, {
-                method: 'PATCH',
+            const res = await fetch('/api/tour/reservations/manage', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'change_slot', new_slot_id: selectedNewSlot }),
+                body: JSON.stringify({
+                    action: 'change_slot',
+                    reservation_code: reservation.reservation_code,
+                    manage_token: reservation.manage_token,
+                    name: reservation.name,
+                    new_slot_id: selectedNewSlot,
+                }),
             });
 
             const json = await res.json();
@@ -134,7 +185,8 @@ export default function TourMyPage() {
                 {/* Header */}
                 <div className="text-center mb-6">
                     <h1 className="text-xl font-bold text-slate-800 mb-1">내 신청 조회</h1>
-                    <p className="text-sm text-slate-500">예약번호와 이름으로 조회합니다</p>
+                    <p className="text-sm text-slate-500">예약번호, 관리번호, 이름으로 조회합니다</p>
+                    <p className="text-xs text-slate-400 mt-1">조 번호 또는 조장 이름으로 검색 후 선택해주세요</p>
                     <Link
                         href="/tour"
                         className="inline-block mt-2 text-xs text-indigo-500 hover:text-indigo-700 underline"
@@ -172,16 +224,35 @@ export default function TourMyPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">이름</label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    placeholder="홍길동"
-                                    required
-                                />
-                            </div>
+                                    <label className="block text-xs font-medium text-slate-600 mb-1">관리번호</label>
+                                    <input
+                                        type="text"
+                                        value={token}
+                                        onChange={e => setToken(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
+                                        placeholder="관리번호"
+                                        required
+                                        maxLength={32}
+                                    />
+                                </div>
+                            <TourLeaderAutocomplete
+                                leaders={leaders}
+                                label="조/조장명"
+                                placeholder="예: 7조 또는 김현숙"
+                                value={leaderQuery}
+                                selectedLeader={selectedLeader}
+                                onValueChange={value => {
+                                    setLeaderQuery(value);
+                                    const matchedLeader = getTourLeaderByQuery(leaders, value);
+                                    setSelectedLeader(matchedLeader);
+                                }}
+                                onSelect={leader => {
+                                    setSelectedLeader(leader);
+                                    setLeaderQuery(formatTourLeaderLabel(leader));
+                                    setError(null);
+                                }}
+                                disabled={loading}
+                            />
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -238,6 +309,10 @@ export default function TourMyPage() {
                                     <div className="text-sm text-slate-700">{reservation.memo}</div>
                                 </div>
                             )}
+                            <div className="bg-slate-50 rounded-lg p-3">
+                                <div className="text-xs text-slate-500 mb-1">관리번호</div>
+                                <div className="font-medium text-slate-800 font-mono break-all">{reservation.manage_token}</div>
+                            </div>
                         </div>
 
                         {reservation.status === 'active' && (

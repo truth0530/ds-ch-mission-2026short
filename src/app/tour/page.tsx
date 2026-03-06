@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { TourLeaderAutocomplete } from '@/components/tour/TourLeaderAutocomplete';
 import { getSbClient } from '@/lib/supabase';
 import { TABLES } from '@/lib/constants';
-import type { TourSlot, TourReservationWithSlot } from '@/types';
+import { formatTourLeaderLabel, getTourLeaderByName, getTourLeaderByQuery } from '@/lib/tour-leaders';
+import type { TourLeader, TourReservationPublicView, TourSlot } from '@/types';
 
 function formatDate(dateStr: string): string {
     const date = new Date(dateStr + 'T00:00:00');
@@ -40,9 +42,12 @@ export default function TourPage() {
     const [slots, setSlots] = useState<TourSlot[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSlot, setSelectedSlot] = useState<TourSlot | null>(null);
+    const [leaders, setLeaders] = useState<TourLeader[]>([]);
     const [form, setForm] = useState<ReservationForm>({ name: '', phone: '', email: '', memo: '' });
+    const [leaderQuery, setLeaderQuery] = useState('');
+    const [selectedLeader, setSelectedLeader] = useState<TourLeader | null>(null);
     const [submitting, setSubmitting] = useState(false);
-    const [result, setResult] = useState<TourReservationWithSlot | null>(null);
+    const [result, setResult] = useState<TourReservationPublicView | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const fetchSlots = useCallback(async () => {
@@ -57,7 +62,20 @@ export default function TourPage() {
         }
     }, []);
 
-    useEffect(() => { fetchSlots(); }, [fetchSlots]);
+    const fetchLeaders = useCallback(async () => {
+        try {
+            const res = await fetch('/api/tour/leaders');
+            const json = await res.json();
+            if (json.data) setLeaders(json.data);
+        } catch {
+            console.error('Failed to fetch leaders');
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchSlots();
+        fetchLeaders();
+    }, [fetchSlots, fetchLeaders]);
 
     // Supabase Realtime
     useEffect(() => {
@@ -78,6 +96,10 @@ export default function TourPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedSlot) return;
+        if (!selectedLeader) {
+            setError('조/조장명을 검색해서 목록에서 선택해주세요');
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {
@@ -86,7 +108,7 @@ export default function TourPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     slot_id: selectedSlot.id,
-                    name: form.name,
+                    name: selectedLeader.name,
                     phone: form.phone,
                     email: form.email || undefined,
                     memo: form.memo || undefined,
@@ -97,6 +119,8 @@ export default function TourPage() {
             setResult(json.data);
             setSelectedSlot(null);
             setForm({ name: '', phone: '', email: '', memo: '' });
+            setLeaderQuery('');
+            setSelectedLeader(null);
             fetchSlots();
         } catch {
             setError('네트워크 오류가 발생했습니다');
@@ -107,6 +131,7 @@ export default function TourPage() {
 
     const morningSlots = slots.filter(s => s.tour_time === '10:00:00' || s.tour_time === '10:00');
     const afternoonSlots = slots.filter(s => s.tour_time === '17:00:00' || s.tour_time === '17:00');
+    const resultLeader = result ? getTourLeaderByName(leaders, result.name) : null;
 
     if (loading) {
         return (
@@ -126,12 +151,17 @@ export default function TourPage() {
                             <MaterialIcon name="check_circle" className="text-emerald-500 text-5xl" filled />
                         </div>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">신청이 완료되었습니다!</h2>
-                        <p className="text-sm text-slate-500 mb-6">아래 예약번호를 꼭 기억해주세요</p>
+                        <p className="text-sm text-slate-500 mb-6">예약번호와 관리번호를 함께 보관해주세요</p>
 
                         <div className="bg-[#6d13ec]/5 border border-[#6d13ec]/20 rounded-2xl p-5 mb-6 text-left space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-slate-500 text-sm">예약번호</span>
                                 <span className="font-bold text-[#6d13ec] text-xl tracking-widest font-mono">{result.reservation_code}</span>
+                            </div>
+                            <div className="h-px bg-slate-200" />
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-500 text-sm">관리번호</span>
+                                <span className="font-bold text-slate-900 text-sm tracking-wide font-mono">{result.manage_token}</span>
                             </div>
                             <div className="h-px bg-slate-200" />
                             <div className="flex justify-between items-center">
@@ -142,8 +172,10 @@ export default function TourPage() {
                             </div>
                             <div className="h-px bg-slate-200" />
                             <div className="flex justify-between items-center">
-                                <span className="text-slate-500 text-sm">이름</span>
-                                <span className="font-bold text-slate-900">{result.name}</span>
+                                <span className="text-slate-500 text-sm">신청자</span>
+                                <span className="font-bold text-slate-900">
+                                    {resultLeader ? formatTourLeaderLabel(resultLeader) : result.name}
+                                </span>
                             </div>
                         </div>
 
@@ -155,7 +187,7 @@ export default function TourPage() {
                                 목록으로
                             </button>
                             <Link
-                                href="/tour/my"
+                                href={`/tour/my?code=${encodeURIComponent(result.reservation_code)}&token=${encodeURIComponent(result.manage_token)}&name=${encodeURIComponent(result.name)}`}
                                 className="flex-1 h-12 text-sm bg-gradient-to-r from-[#6d13ec] to-[#9333ea] text-white rounded-xl hover:opacity-90 transition-all shadow-lg shadow-[#6d13ec]/30 font-semibold flex items-center justify-center gap-1"
                             >
                                 내 신청 조회
@@ -271,18 +303,26 @@ export default function TourPage() {
 
                                     {/* Form Fields */}
                                     <form id="tour-form" onSubmit={handleSubmit} className="space-y-4">
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-slate-700 text-sm font-semibold px-1">이름</label>
-                                            <input
-                                                type="text"
-                                                value={form.name}
-                                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                                                className="w-full px-4 h-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-[#6d13ec] focus:border-[#6d13ec] placeholder:text-slate-400 text-sm"
-                                                placeholder="성함을 입력하세요"
-                                                required
-                                                maxLength={20}
-                                            />
-                                        </div>
+                                        <TourLeaderAutocomplete
+                                            leaders={leaders}
+                                            label="조/조장명"
+                                            placeholder="예: 3조 또는 홍수경"
+                                            value={leaderQuery}
+                                            selectedLeader={selectedLeader}
+                                            onValueChange={value => {
+                                                setLeaderQuery(value);
+                                                setForm(f => ({ ...f, name: value }));
+                                                const matchedLeader = getTourLeaderByQuery(leaders, value);
+                                                setSelectedLeader(matchedLeader);
+                                            }}
+                                            onSelect={leader => {
+                                                setSelectedLeader(leader);
+                                                setLeaderQuery(formatTourLeaderLabel(leader));
+                                                setForm(f => ({ ...f, name: leader.name }));
+                                                setError(null);
+                                            }}
+                                            disabled={submitting}
+                                        />
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-slate-700 text-sm font-semibold px-1">연락처</label>
                                             <input

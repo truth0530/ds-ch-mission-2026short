@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRequireAdmin } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
-import type { TourSlot, TourReservationWithSlot } from '@/types';
+import type { TourLeader, TourReservationAdminView, TourSlot } from '@/types';
 
 function formatDate(dateStr: string): string {
     const date = new Date(dateStr + 'T00:00:00');
@@ -21,40 +21,58 @@ function formatDateTime(dateStr: string): string {
 }
 
 export default function AdminTourPage() {
-    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
+    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
 
     const [loading, setLoading] = useState(true);
     const [slots, setSlots] = useState<TourSlot[]>([]);
-    const [reservations, setReservations] = useState<TourReservationWithSlot[]>([]);
+    const [leaders, setLeaders] = useState<TourLeader[]>([]);
+    const [reservations, setReservations] = useState<TourReservationAdminView[]>([]);
     const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
     const [cancelling, setCancelling] = useState<string | null>(null);
+    const [leaderForm, setLeaderForm] = useState({ group_number: '', name: '' });
+    const [leaderSaving, setLeaderSaving] = useState(false);
+    const [editingLeaderId, setEditingLeaderId] = useState<string | null>(null);
+    const [leaderError, setLeaderError] = useState<string | null>(null);
+
+    const getAuthHeaders = useCallback(async () => {
+        const session = client ? await client.auth.getSession() : null;
+        const accessToken = session?.data.session?.access_token;
+        const headers: Record<string, string> = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+        return headers;
+    }, [client]);
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch('/api/tour/admin');
+            const res = await fetch('/api/tour/admin', {
+                headers: await getAuthHeaders(),
+            });
             const json = await res.json();
             if (json.slots) setSlots(json.slots);
+            if (json.leaders) setLeaders(json.leaders);
             if (json.reservations) setReservations(json.reservations);
         } catch {
             console.error('Failed to fetch tour admin data');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getAuthHeaders]);
 
     useEffect(() => {
         if (isAuthorized) fetchData();
     }, [isAuthorized, fetchData]);
 
-    const handleCancel = async (reservationId: string) => {
+    const handleCancel = useCallback(async (reservationId: string) => {
         if (!confirm('이 예약을 취소하시겠습니까?')) return;
 
         setCancelling(reservationId);
         try {
             const res = await fetch(`/api/tour/reservations/${reservationId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'cancel' }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(await getAuthHeaders()),
+                },
             });
 
             if (res.ok) {
@@ -65,7 +83,75 @@ export default function AdminTourPage() {
         } finally {
             setCancelling(null);
         }
-    };
+    }, [fetchData, getAuthHeaders]);
+
+    const resetLeaderForm = useCallback(() => {
+        setLeaderForm({ group_number: '', name: '' });
+        setEditingLeaderId(null);
+        setLeaderError(null);
+    }, []);
+
+    const handleLeaderSubmit = useCallback(async () => {
+        const groupNumber = Number(leaderForm.group_number);
+        if (!Number.isInteger(groupNumber) || groupNumber <= 0 || leaderForm.name.trim().length < 2) {
+            setLeaderError('조 번호와 조장 이름을 올바르게 입력해주세요');
+            return;
+        }
+
+        setLeaderSaving(true);
+        setLeaderError(null);
+
+        try {
+            const res = await fetch(
+                editingLeaderId ? `/api/tour/leaders/${editingLeaderId}` : '/api/tour/leaders',
+                {
+                    method: editingLeaderId ? 'PATCH' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(await getAuthHeaders()),
+                    },
+                    body: JSON.stringify({
+                        group_number: groupNumber,
+                        name: leaderForm.name.trim(),
+                        is_active: true,
+                    }),
+                }
+            );
+
+            const json = await res.json();
+            if (!res.ok) {
+                setLeaderError(json.error || '조장 명단 저장에 실패했습니다');
+                return;
+            }
+
+            resetLeaderForm();
+            fetchData();
+        } catch {
+            setLeaderError('조장 명단 저장 중 오류가 발생했습니다');
+        } finally {
+            setLeaderSaving(false);
+        }
+    }, [editingLeaderId, fetchData, getAuthHeaders, leaderForm.group_number, leaderForm.name, resetLeaderForm]);
+
+    const handleLeaderDelete = useCallback(async (leaderId: string) => {
+        if (!confirm('이 조장을 비활성화하시겠습니까?')) return;
+
+        try {
+            const res = await fetch(`/api/tour/leaders/${leaderId}`, {
+                method: 'DELETE',
+                headers: await getAuthHeaders(),
+            });
+
+            if (res.ok) {
+                if (editingLeaderId === leaderId) {
+                    resetLeaderForm();
+                }
+                fetchData();
+            }
+        } catch {
+            setLeaderError('조장 비활성화에 실패했습니다');
+        }
+    }, [editingLeaderId, fetchData, getAuthHeaders, resetLeaderForm]);
 
     if (authLoading) return null;
 
@@ -106,6 +192,104 @@ export default function AdminTourPage() {
                     <div className="bg-white rounded-xl border border-slate-200 p-3">
                         <div className="text-xs text-slate-500">잔여석</div>
                         <div className="text-xl font-bold text-green-600">{slots.reduce((a, s) => a + (s.max_capacity - s.current_bookings), 0)}</div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4 mb-4">
+                    <div className="bg-white rounded-xl border border-slate-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="font-bold text-slate-800">조장 명단</h2>
+                            <span className="text-xs text-slate-400">{leaders.length}명</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-500">
+                                        <th className="px-3 py-2 text-left font-medium">조</th>
+                                        <th className="px-3 py-2 text-left font-medium">조장</th>
+                                        <th className="px-3 py-2 text-left font-medium">관리</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leaders.map(leader => (
+                                        <tr key={leader.id} className="border-t border-slate-100">
+                                            <td className="px-3 py-2 font-medium">{leader.group_number}조</td>
+                                            <td className="px-3 py-2">{leader.name}</td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingLeaderId(leader.id);
+                                                            setLeaderForm({
+                                                                group_number: String(leader.group_number),
+                                                                name: leader.name,
+                                                            });
+                                                            setLeaderError(null);
+                                                        }}
+                                                        className="px-2 py-1 text-[10px] bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors"
+                                                    >
+                                                        수정
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleLeaderDelete(leader.id)}
+                                                        className="px-2 py-1 text-[10px] bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+                                                    >
+                                                        비활성화
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-slate-200 p-4">
+                        <h2 className="font-bold text-slate-800 mb-3">
+                            {editingLeaderId ? '조장 수정' : '조장 추가'}
+                        </h2>
+                        {leaderError && (
+                            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                {leaderError}
+                            </div>
+                        )}
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">조 번호</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={leaderForm.group_number}
+                                    onChange={event => setLeaderForm(prev => ({ ...prev, group_number: event.target.value }))}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">조장 이름</label>
+                                <input
+                                    type="text"
+                                    value={leaderForm.name}
+                                    onChange={event => setLeaderForm(prev => ({ ...prev, name: event.target.value }))}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleLeaderSubmit}
+                                    disabled={leaderSaving}
+                                    className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    {leaderSaving ? '저장 중...' : editingLeaderId ? '수정 저장' : '추가'}
+                                </button>
+                                <button
+                                    onClick={resetLeaderForm}
+                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                                >
+                                    초기화
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

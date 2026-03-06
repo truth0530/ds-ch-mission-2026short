@@ -1,23 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { ENV_CONFIG, TABLES, TOUR_CONFIG } from '@/lib/constants';
-import { sanitizeInput } from '@/lib/validators';
-
-function getServerClient() {
-    const supabaseUrl = ENV_CONFIG.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ENV_CONFIG.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return null;
-    return createClient(supabaseUrl, supabaseKey);
-}
-
-function generateReservationCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < TOUR_CONFIG.RESERVATION_CODE_LENGTH; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getServerSupabaseClient, getRequestIp } from '@/lib/supabase-server';
+import { formatTourReservation, toPublicReservation } from '@/lib/tour';
+import { isValidEmail, sanitizeInput } from '@/lib/validators';
+import type { TourReservationRpcRow } from '@/types';
 
 function isValidPhone(phone: string): boolean {
     return /^[\d\-\s()+ ]{8,20}$/.test(phone);
@@ -26,9 +12,14 @@ function isValidPhone(phone: string): boolean {
 // POST: 새 예약 생성
 export async function POST(request: NextRequest) {
     try {
-        const client = getServerClient();
+        const client = getServerSupabaseClient();
         if (!client) {
             return NextResponse.json({ error: 'DB 연결 실패' }, { status: 500 });
+        }
+
+        const ip = getRequestIp(request);
+        if (!checkRateLimit(`tour:create:${ip}`, 5, 10 * 60 * 1000)) {
+            return NextResponse.json({ error: '잠시 후 다시 시도해주세요' }, { status: 429 });
         }
 
         const body = await request.json();
@@ -42,72 +33,61 @@ export async function POST(request: NextRequest) {
         const cleanPhone = sanitizeInput(phone.trim());
 
         if (cleanName.length < 2) {
-            return NextResponse.json({ error: '이름을 2자 이상 입력해주세요' }, { status: 400 });
+            return NextResponse.json({ error: '조장 이름을 선택해주세요' }, { status: 400 });
+        }
+
+        const { data: leader, error: leaderError } = await client
+            .from('tour_leaders')
+            .select('id')
+            .eq('name', cleanName)
+            .eq('is_active', true)
+            .maybeSingle();
+
+        if (leaderError) {
+            return NextResponse.json({ error: leaderError.message }, { status: 500 });
+        }
+
+        if (!leader) {
+            return NextResponse.json({ error: '조장 목록에서 이름을 선택해주세요' }, { status: 400 });
         }
 
         if (!isValidPhone(cleanPhone)) {
             return NextResponse.json({ error: '올바른 연락처를 입력해주세요' }, { status: 400 });
         }
 
-        // 슬롯 잔여석 확인
-        const { data: slot, error: slotError } = await client
-            .from(TABLES.TOUR_SLOTS)
-            .select('id, current_bookings, max_capacity, is_active')
-            .eq('id', slot_id)
-            .single();
-
-        if (slotError || !slot) {
-            return NextResponse.json({ error: '존재하지 않는 일정입니다' }, { status: 404 });
+        const cleanEmail = email ? sanitizeInput(email.trim()) : null;
+        if (cleanEmail && !isValidEmail(cleanEmail)) {
+            return NextResponse.json({ error: '올바른 이메일을 입력해주세요' }, { status: 400 });
         }
 
-        if (!slot.is_active) {
-            return NextResponse.json({ error: '비활성화된 일정입니다' }, { status: 400 });
-        }
+        const { data: reservation, error } = await client.rpc('create_tour_reservation', {
+            p_slot_id: slot_id,
+            p_name: cleanName,
+            p_phone: cleanPhone,
+            p_email: cleanEmail,
+            p_memo: memo ? sanitizeInput(memo.trim()) : null,
+        });
 
-        if (slot.current_bookings >= slot.max_capacity) {
-            return NextResponse.json({ error: '해당 일정은 마감되었습니다' }, { status: 409 });
-        }
-
-        // 예약번호 생성 (중복 방지 재시도)
-        let reservationCode = '';
-        for (let i = 0; i < 5; i++) {
-            const code = generateReservationCode();
-            const { data: existing } = await client
-                .from(TABLES.TOUR_RESERVATIONS)
-                .select('id')
-                .eq('reservation_code', code)
-                .single();
-            if (!existing) {
-                reservationCode = code;
-                break;
-            }
-        }
-
-        if (!reservationCode) {
-            return NextResponse.json({ error: '예약번호 생성에 실패했습니다. 다시 시도해주세요.' }, { status: 500 });
-        }
-
-        const { data: reservation, error: insertError } = await client
-            .from(TABLES.TOUR_RESERVATIONS)
-            .insert({
-                slot_id,
-                reservation_code: reservationCode,
-                name: cleanName,
-                phone: cleanPhone,
-                email: email ? sanitizeInput(email.trim()) : null,
-                memo: memo ? sanitizeInput(memo.trim()) : null,
-            })
-            .select('*, tour_slots(tour_date, tour_time, time_label)')
-            .single();
-
-        if (insertError) {
-            if (insertError.message?.includes('check_capacity')) {
+        if (error) {
+            if (error.message?.includes('SLOT_FULL')) {
                 return NextResponse.json({ error: '해당 일정은 마감되었습니다' }, { status: 409 });
             }
-            return NextResponse.json({ error: insertError.message }, { status: 500 });
+            if (error.message?.includes('INVALID_SLOT')) {
+                return NextResponse.json({ error: '존재하지 않는 일정입니다' }, { status: 404 });
+            }
+            if (error.message?.includes('INACTIVE_SLOT')) {
+                return NextResponse.json({ error: '비활성화된 일정입니다' }, { status: 400 });
+            }
+            return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ data: reservation }, { status: 201 });
+        const row = Array.isArray(reservation) ? reservation[0] : reservation;
+        if (!row) {
+            return NextResponse.json({ error: '예약 생성에 실패했습니다' }, { status: 500 });
+        }
+
+        const formatted = formatTourReservation(row as TourReservationRpcRow);
+        return NextResponse.json({ data: toPublicReservation(formatted) }, { status: 201 });
     } catch {
         return NextResponse.json({ error: '서버 오류' }, { status: 500 });
     }

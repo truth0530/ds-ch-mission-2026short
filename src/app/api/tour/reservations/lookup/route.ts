@@ -1,37 +1,38 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { ENV_CONFIG, TABLES } from '@/lib/constants';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getRequestIp, getServerSupabaseClient } from '@/lib/supabase-server';
 import { sanitizeInput } from '@/lib/validators';
-
-function getServerClient() {
-    const supabaseUrl = ENV_CONFIG.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ENV_CONFIG.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return null;
-    return createClient(supabaseUrl, supabaseKey);
-}
+import type { TourReservationManageView, TourReservationWithSlot } from '@/types';
 
 // POST: 예약번호 + 이름으로 조회
 export async function POST(request: NextRequest) {
     try {
-        const client = getServerClient();
+        const client = getServerSupabaseClient();
         if (!client) {
             return NextResponse.json({ error: 'DB 연결 실패' }, { status: 500 });
         }
 
-        const body = await request.json();
-        const { reservation_code, name } = body;
+        const ip = getRequestIp(request);
+        if (!checkRateLimit(`tour:lookup:${ip}`, 20, 10 * 60 * 1000)) {
+            return NextResponse.json({ error: '잠시 후 다시 시도해주세요' }, { status: 429 });
+        }
 
-        if (!reservation_code || !name) {
-            return NextResponse.json({ error: '예약번호와 이름을 입력해주세요' }, { status: 400 });
+        const body = await request.json();
+        const { reservation_code, manage_token, name } = body;
+
+        if (!reservation_code || !manage_token || !name) {
+            return NextResponse.json({ error: '예약번호, 관리번호, 이름을 입력해주세요' }, { status: 400 });
         }
 
         const cleanCode = sanitizeInput(reservation_code.trim().toUpperCase());
+        const cleanToken = sanitizeInput(manage_token.trim());
         const cleanName = sanitizeInput(name.trim());
 
         const { data, error } = await client
-            .from(TABLES.TOUR_RESERVATIONS)
+            .from('tour_reservations')
             .select('*, tour_slots(tour_date, tour_time, time_label)')
             .eq('reservation_code', cleanCode)
+            .eq('manage_token', cleanToken)
             .eq('name', cleanName)
             .single();
 
@@ -39,7 +40,22 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '일치하는 예약을 찾을 수 없습니다' }, { status: 404 });
         }
 
-        return NextResponse.json({ data });
+        const reservation = data as TourReservationWithSlot;
+        const formatted: TourReservationManageView = {
+            reservation_code: reservation.reservation_code,
+            manage_token: reservation.manage_token,
+            name: reservation.name,
+            phone: reservation.phone,
+            email: reservation.email,
+            memo: reservation.memo,
+            status: reservation.status,
+            created_at: reservation.created_at,
+            updated_at: reservation.updated_at,
+            slot_id: reservation.slot_id,
+            tour_slots: reservation.tour_slots,
+        };
+
+        return NextResponse.json({ data: formatted });
     } catch {
         return NextResponse.json({ error: '서버 오류' }, { status: 500 });
     }
