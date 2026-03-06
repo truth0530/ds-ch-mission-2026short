@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { getSbClient } from '@/lib/supabase';
 import { TABLES } from '@/lib/constants';
 import { Question } from '@/lib/surveyData';
-import { useRequireAdmin } from '@/hooks/useAdminAuth';
-import { AdminLoginCard, AdminErrorAlert } from '@/components/admin';
+import { useRequireAdmin, hasAccess } from '@/hooks/useAdminAuth';
+import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 import * as XLSX from 'xlsx';
 
 interface Evaluation {
@@ -27,7 +27,7 @@ type SortConfig = { key: string; direction: SortDirection };
 const PAGE_SIZE = 50;
 
 export default function ResponsesPage() {
-    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
+    const { user, isAuthorized, adminRole, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
 
     const [loading, setLoading] = useState(true);
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -233,37 +233,27 @@ export default function ResponsesPage() {
         return <AdminLoginCard user={user} onLogin={() => login('/admin/responses')} onLogout={logout} title="응답 데이터" />;
     }
 
+    if (!hasAccess(adminRole, 'survey')) {
+        return <div className="flex items-center justify-center min-h-screen bg-white"><p className="text-slate-500 text-sm">이 페이지에 접근 권한이 없습니다.</p></div>;
+    }
+
     return (
         <div className="min-h-screen bg-white font-sans text-sm">
-            {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-                <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            </div>
-                            <span className="font-bold text-slate-800">응답시트</span>
-                        </div>
-                        <nav className="flex items-center gap-1 text-xs">
-                            <a href="/admin/dashboard" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">대시보드</a>
-                            <span className="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium shadow-lg shadow-cyan-500/25">응답시트</span>
-                            <a href="/admin/questions" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">설정</a>
-                        </nav>
-                    </div>
-                    <div className="flex items-center gap-3">
+            <AdminHeader
+                activePage="responses"
+                onLogout={logout}
+                adminRole={adminRole}
+                rightContent={
+                    <>
                         <span className="text-xs text-slate-500"><span className="font-semibold text-slate-700">{sortedData.length}</span>건</span>
                         <div className="relative">
                             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             <input type="text" placeholder="검색" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-32 pl-8 pr-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 placeholder:text-slate-400" />
                         </div>
                         <button onClick={handleExport} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors">Excel</button>
-                        <button onClick={logout} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="로그아웃">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </button>
-                    </div>
-                </div>
-            </header>
+                    </>
+                }
+            />
 
             <main className="max-w-screen-xl mx-auto px-4 py-4">
                 {(authError || dataError) && (

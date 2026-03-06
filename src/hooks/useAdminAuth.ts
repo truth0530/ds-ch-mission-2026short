@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
-import { AuthState } from '@/types';
+import { AuthState, AdminRole } from '@/types';
 import { getSbClient, SupabaseClient } from '@/lib/supabase';
 import { TABLES, ENV_CONFIG } from '@/lib/constants';
 
@@ -23,6 +23,7 @@ export function useAdminAuth(): UseAdminAuthReturn {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAdmin: false,
+    adminRole: null,
     loading: true,
   });
   const [client, setClient] = useState<SupabaseClient | null>(null);
@@ -42,7 +43,7 @@ export function useAdminAuth(): UseAdminAuthReturn {
     try {
       const { data, error: dbError } = await client
         .from(TABLES.ADMIN_USERS)
-        .select('email')
+        .select('email, role')
         .eq('email', user.email)
         .maybeSingle();
 
@@ -52,11 +53,22 @@ export function useAdminAuth(): UseAdminAuthReturn {
         return false;
       }
 
-      // Check DB first, then fallback to env admin email
       const fallbackEmail = ENV_CONFIG.ADMIN_EMAIL;
-      const isAdmin = !!data || !!(fallbackEmail && user.email === fallbackEmail);
-      if (isAdmin) setError(null);
-      return isAdmin;
+
+      if (data) {
+        const role = (data.role as AdminRole) || 'all';
+        setAuthState(prev => ({ ...prev, adminRole: role }));
+        setError(null);
+        return true;
+      }
+
+      if (fallbackEmail && user.email === fallbackEmail) {
+        setAuthState(prev => ({ ...prev, adminRole: 'master' }));
+        setError(null);
+        return true;
+      }
+
+      return false;
     } catch (err) {
       console.error('[useAdminAuth] Error checking admin status:', err);
       setError('권한 확인 중 오류가 발생했습니다.');
@@ -69,12 +81,12 @@ export function useAdminAuth(): UseAdminAuthReturn {
    */
   const handleAuthChange = useCallback(async (user: User | null) => {
     if (!user) {
-      setAuthState({ user: null, isAdmin: false, loading: false });
+      setAuthState({ user: null, isAdmin: false, adminRole: null, loading: false });
       return;
     }
 
     const isAdmin = await checkAdminStatus(user);
-    setAuthState({ user, isAdmin, loading: false });
+    setAuthState(prev => ({ ...prev, user, isAdmin, loading: false }));
   }, [checkAdminStatus]);
 
   /**
@@ -149,7 +161,7 @@ export function useAdminAuth(): UseAdminAuthReturn {
 
     try {
       await client.auth.signOut();
-      setAuthState({ user: null, isAdmin: false, loading: false });
+      setAuthState({ user: null, isAdmin: false, adminRole: null, loading: false });
       window.location.reload();
     } catch (err) {
       console.error('[useAdminAuth] Logout error:', err);
@@ -169,9 +181,20 @@ export function useAdminAuth(): UseAdminAuthReturn {
 }
 
 /**
- * Hook to require admin access
- * Redirects to home if not admin
+ * Check if a role has access to a specific page scope.
+ * master → everything
+ * all → survey + tour (but not admin management)
+ * survey → survey pages only
+ * tour → tour pages only
  */
+export function hasAccess(role: AdminRole | null, scope: 'survey' | 'tour' | 'master'): boolean {
+  if (!role) return false;
+  if (role === 'master') return true;
+  if (scope === 'master') return false;
+  if (role === 'all') return true;
+  return role === scope;
+}
+
 export function useRequireAdmin(): UseAdminAuthReturn & { isAuthorized: boolean } {
   const auth = useAdminAuth();
   const [isAuthorized, setIsAuthorized] = useState(false);

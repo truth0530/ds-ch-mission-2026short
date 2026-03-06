@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
         // Check if it's the super admin
         if (email === ENV_CONFIG.ADMIN_EMAIL) {
-            return NextResponse.json({ isAdmin: true });
+            return NextResponse.json({ isAdmin: true, role: 'master' });
         }
 
         // Check database for admin users
@@ -51,20 +51,19 @@ export async function POST(request: NextRequest) {
 
         const { data, error } = await client
             .from(TABLES.ADMIN_USERS)
-            .select('email')
+            .select('email, role')
             .eq('email', email.toLowerCase())
             .single();
 
         if (error && error.code !== 'PGRST116') {
-            // PGRST116 = no rows returned, which is not an error for our case
             console.error('Admin check error:', error);
             return NextResponse.json(
-                { error: 'Database query failed', isAdmin: false },
+                { error: 'Database query failed', isAdmin: false, role: null },
                 { status: 500 }
             );
         }
 
-        return NextResponse.json({ isAdmin: !!data });
+        return NextResponse.json({ isAdmin: !!data, role: data?.role || null });
     } catch (error) {
         console.error('Admin check failed:', error);
         return NextResponse.json(

@@ -7,13 +7,13 @@ import { Evaluation, TeamInfo, ToastMessage } from '@/types';
 import { validateEvaluations } from '@/lib/validators';
 import { MISSION_TEAMS, getQuestionText, getScaleQuestionIds, getTextQuestions } from '@/lib/surveyData';
 import { ToastContainer } from '@/components/ui/Toast';
-import { useRequireAdmin } from '@/hooks/useAdminAuth';
+import { useRequireAdmin, hasAccess } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 import { ResponseDetailModal, DashboardFilters, ListModal, TextAnswersModal, Stats, FilterState } from '@/components/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminDashboard() {
-    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
+    const { user, isAuthorized, adminRole, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
 
     const [loading, setLoading] = useState(true);
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -483,6 +483,10 @@ export default function AdminDashboard() {
         return <AdminLoginCard user={user} onLogin={() => login('/admin/dashboard')} onLogout={logout} title="대시보드" />;
     }
 
+    if (!hasAccess(adminRole, 'survey')) {
+        return <div className="flex items-center justify-center min-h-screen bg-gray-50"><p className="text-slate-500 text-sm">이 페이지에 접근 권한이 없습니다.</p></div>;
+    }
+
     const uniqueTeams = Array.from(new Set(evaluations.map(e => e.team_missionary))).filter(Boolean);
 
     return (
@@ -492,6 +496,7 @@ export default function AdminDashboard() {
             <AdminHeader
                 activePage="dashboard"
                 onLogout={logout}
+                adminRole={adminRole}
                 rightContent={<span className="text-xs text-gray-500 hidden sm:inline">{user?.email}</span>}
             />
 

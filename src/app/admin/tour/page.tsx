@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRequireAdmin } from '@/hooks/useAdminAuth';
+import { useRequireAdmin, hasAccess } from '@/hooks/useAdminAuth';
 import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 import type { TourLeader, TourReservationAdminView, TourSlot } from '@/types';
 
@@ -21,7 +21,7 @@ function formatDateTime(dateStr: string): string {
 }
 
 export default function AdminTourPage() {
-    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
+    const { user, isAuthorized, adminRole, loading: authLoading, login, logout, error: authError, clearError, client } = useRequireAdmin();
 
     const [loading, setLoading] = useState(true);
     const [slots, setSlots] = useState<TourSlot[]>([]);
@@ -163,6 +163,10 @@ export default function AdminTourPage() {
         );
     }
 
+    if (!hasAccess(adminRole, 'tour')) {
+        return <div className="flex items-center justify-center min-h-screen bg-gray-50"><p className="text-slate-500 text-sm">이 페이지에 접근 권한이 없습니다.</p></div>;
+    }
+
     const activeReservations = reservations.filter(r => r.status === 'active');
     const totalActive = activeReservations.length;
     const filteredReservations = selectedSlotId
@@ -171,7 +175,7 @@ export default function AdminTourPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans text-sm">
-            <AdminHeader activePage={'tour' as never} onLogout={logout} />
+            <AdminHeader activePage="tour" onLogout={logout} adminRole={adminRole} />
             <main className="max-w-screen-xl mx-auto px-4 py-3">
                 {authError && <AdminErrorAlert error={authError} onDismiss={clearError} />}
 

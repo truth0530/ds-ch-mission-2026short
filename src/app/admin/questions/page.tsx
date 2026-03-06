@@ -1,23 +1,30 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { getSbClient } from '@/lib/supabase';
 import { INITIAL_QUESTIONS, Question, MISSION_TEAMS, TeamInfo } from '@/lib/surveyData';
 import { QuestionType } from '@/types';
 import { TABLES } from '@/lib/constants';
 import { isValidEmail, generateId } from '@/lib/validators';
-import { useRequireAdmin } from '@/hooks/useAdminAuth';
-import { AdminLoginCard, AdminErrorAlert } from '@/components/admin';
+import { useRequireAdmin, hasAccess } from '@/hooks/useAdminAuth';
+import { AdminHeader, AdminLoginCard, AdminErrorAlert } from '@/components/admin';
 
 interface AdminUser {
     email: string;
+    role: string;
     created_at: string;
     added_by: string;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+    master: '마스터',
+    survey: '설문관리',
+    tour: '투어관리',
+    all: '전체',
+};
+
 export default function AdminQuestionsPage() {
-    const { user, isAuthorized, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
+    const { user, isAuthorized, adminRole, loading: authLoading, login, logout, error: authError, clearError } = useRequireAdmin();
 
     const [activeTab, setActiveTab] = useState<'questions' | 'admins' | 'teams'>('questions');
     const [questions, setQuestions] = useState<Question[]>([]);
@@ -33,6 +40,7 @@ export default function AdminQuestionsPage() {
     const [teamForm, setTeamForm] = useState<Partial<TeamInfo>>({});
 
     const [newAdminEmail, setNewAdminEmail] = useState('');
+    const [newAdminRole, setNewAdminRole] = useState<string>('all');
 
     const [questionRoleFilter, setQuestionRoleFilter] = useState<string>('all');
     const [questionTypeFilter, setQuestionTypeFilter] = useState<string>('all');
@@ -67,7 +75,7 @@ export default function AdminQuestionsPage() {
     const fetchAdmins = async () => {
         const client = getSbClient();
         if (!client) { setDataError('데이터베이스 연결 실패'); return; }
-        const { data, error } = await client.from(TABLES.ADMIN_USERS).select('*').order('created_at', { ascending: false });
+        const { data, error } = await client.from(TABLES.ADMIN_USERS).select('email, role, created_at, added_by').order('created_at', { ascending: false });
         if (error) setDataError('관리자 데이터 로드 실패');
         else setAdmins(data || []);
     };
@@ -144,9 +152,9 @@ export default function AdminQuestionsPage() {
         const client = getSbClient();
         if (!client || !newAdminEmail || !user) return;
         if (!isValidEmail(newAdminEmail)) { showNotification('유효한 이메일을 입력하세요.', 'error'); return; }
-        const { error } = await client.from(TABLES.ADMIN_USERS).insert([{ email: newAdminEmail.trim().toLowerCase(), added_by: user.email }]);
+        const { error } = await client.from(TABLES.ADMIN_USERS).insert([{ email: newAdminEmail.trim().toLowerCase(), role: newAdminRole, added_by: user.email }]);
         if (error) showNotification('추가 실패: ' + error.message, 'error');
-        else { setNewAdminEmail(''); fetchAdmins(); showNotification('추가되었습니다.', 'success'); }
+        else { setNewAdminEmail(''); setNewAdminRole('all'); fetchAdmins(); showNotification('추가되었습니다.', 'success'); }
     };
 
     const handleDeleteAdmin = async (email: string) => {
@@ -159,12 +167,24 @@ export default function AdminQuestionsPage() {
         else { fetchAdmins(); showNotification('해제되었습니다.', 'success'); }
     };
 
+    const handleChangeRole = async (email: string, role: string) => {
+        const client = getSbClient();
+        if (!client) return;
+        const { error } = await client.from(TABLES.ADMIN_USERS).update({ role }).eq('email', email);
+        if (error) showNotification('역할 변경 실패: ' + error.message, 'error');
+        else { fetchAdmins(); showNotification('역할이 변경되었습니다.', 'success'); }
+    };
+
     if (authLoading) {
         return <div className="flex items-center justify-center min-h-screen bg-white"><div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div></div>;
     }
 
     if (!isAuthorized) {
         return <AdminLoginCard user={user} onLogin={() => login('/admin/questions')} onLogout={logout} title="설정" />;
+    }
+
+    if (!hasAccess(adminRole, 'master')) {
+        return <div className="flex items-center justify-center min-h-screen bg-white"><p className="text-slate-500 text-sm">이 페이지에 접근 권한이 없습니다.</p></div>;
     }
 
     const filteredQuestions = questions.filter(q =>
@@ -197,30 +217,12 @@ export default function AdminQuestionsPage() {
                 </div>
             )}
 
-            {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-                <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                            </div>
-                            <span className="font-bold text-slate-800">Settings</span>
-                        </div>
-                        <nav className="flex items-center gap-1 text-xs" aria-label="관리자 메뉴">
-                            <Link href="/admin/dashboard" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">대시보드</Link>
-                            <Link href="/admin/responses" className="px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-white/50 transition-colors">응답시트</Link>
-                            <span className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/25">설정</span>
-                        </nav>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs text-slate-500 hidden sm:inline">{user?.email}</span>
-                        <button onClick={logout} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="로그아웃" aria-label="로그아웃">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <AdminHeader
+                activePage="settings"
+                onLogout={logout}
+                adminRole={adminRole}
+                rightContent={<span className="text-xs text-slate-500 hidden sm:inline">{user?.email}</span>}
+            />
 
             <main className="max-w-screen-xl mx-auto px-4 py-4">
                 <AdminErrorAlert error={authError || dataError} onDismiss={authError ? clearError : () => setDataError(null)} />
@@ -435,6 +437,11 @@ export default function AdminQuestionsPage() {
                                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
                                 <input type="email" placeholder="이메일 주소" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAdmin()} className="w-full text-xs text-slate-800 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all placeholder:text-slate-400" />
                             </div>
+                            <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)} className="text-xs text-slate-800 border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400">
+                                <option value="survey">설문관리</option>
+                                <option value="tour">투어관리</option>
+                                <option value="all">전체</option>
+                            </select>
                             <button onClick={handleAddAdmin} className="px-5 py-2.5 text-xs bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg shadow-amber-500/25 font-medium">추가</button>
                         </div>
 
@@ -444,8 +451,8 @@ export default function AdminQuestionsPage() {
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">이메일</th>
+                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">역할</th>
                                         <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">추가일</th>
-                                        <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-600">추가자</th>
                                         <th scope="col" className="text-right py-3 px-4 font-semibold text-slate-600"><span className="sr-only">작업</span></th>
                                     </tr>
                                 </thead>
@@ -456,10 +463,20 @@ export default function AdminQuestionsPage() {
                                                 <span className="font-medium text-slate-800">{admin.email}</span>
                                                 {admin.email === user?.email && <span className="ml-2 text-[9px] bg-gradient-to-r from-amber-500 to-orange-500 text-white px-1.5 py-0.5 rounded-md font-semibold">YOU</span>}
                                             </td>
+                                            <td className="py-3 px-4">
+                                                {admin.role === 'master' ? (
+                                                    <span className="text-[10px] bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-0.5 rounded-md font-semibold">마스터</span>
+                                                ) : (
+                                                    <select value={admin.role} onChange={e => handleChangeRole(admin.email, e.target.value)} className="text-xs text-slate-700 border border-slate-200 rounded-lg px-2 py-1 bg-white">
+                                                        <option value="survey">설문관리</option>
+                                                        <option value="tour">투어관리</option>
+                                                        <option value="all">전체</option>
+                                                    </select>
+                                                )}
+                                            </td>
                                             <td className="py-3 px-4 text-slate-600">{new Date(admin.created_at).toLocaleDateString('ko-KR')}</td>
-                                            <td className="py-3 px-4 text-slate-500">{admin.added_by || '-'}</td>
                                             <td className="py-3 px-4 text-right">
-                                                <button onClick={() => handleDeleteAdmin(admin.email)} disabled={admin.email === user?.email} className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${admin.email === user?.email ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>해제</button>
+                                                <button onClick={() => handleDeleteAdmin(admin.email)} disabled={admin.email === user?.email || admin.role === 'master'} className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${admin.email === user?.email || admin.role === 'master' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>해제</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -474,7 +491,7 @@ export default function AdminQuestionsPage() {
                             </div>
                             <div>
                                 <p className="font-semibold text-amber-800 mb-1">관리자 권한 안내</p>
-                                <p>관리자로 추가된 이메일은 Google OAuth 로그인 시 대시보드와 설정 페이지에 접근할 수 있습니다.</p>
+                                <p><strong>설문관리</strong>: 대시보드, 응답시트 접근 · <strong>투어관리</strong>: 투어관리 접근 · <strong>전체</strong>: 설문+투어 모두 접근 · <strong>마스터</strong>: 모든 권한 + 관리자 관리</p>
                             </div>
                         </div>
                     </div>

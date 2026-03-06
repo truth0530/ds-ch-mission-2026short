@@ -1,21 +1,33 @@
 'use client';
 
 import Link from 'next/link';
+import type { AdminRole } from '@/types';
 
 export type AdminPage = 'dashboard' | 'responses' | 'settings' | 'tour';
+
+type PageScope = 'survey' | 'tour' | 'master';
 
 interface AdminHeaderProps {
     activePage: AdminPage;
     onLogout: () => void;
     rightContent?: React.ReactNode;
+    adminRole?: AdminRole | null;
 }
 
-const navItems: { id: AdminPage; label: string; href: string }[] = [
-    { id: 'dashboard', label: '대시보드', href: '/admin/dashboard' },
-    { id: 'responses', label: '응답시트', href: '/admin/responses' },
-    { id: 'settings', label: '설정', href: '/admin/questions' },
-    { id: 'tour', label: '투어관리', href: '/admin/tour' },
+const navItems: { id: AdminPage; label: string; href: string; scope: PageScope }[] = [
+    { id: 'dashboard', label: '대시보드', href: '/admin/dashboard', scope: 'survey' },
+    { id: 'responses', label: '응답시트', href: '/admin/responses', scope: 'survey' },
+    { id: 'settings', label: '설정', href: '/admin/questions', scope: 'master' },
+    { id: 'tour', label: '투어관리', href: '/admin/tour', scope: 'tour' },
 ];
+
+function canSeeNav(role: AdminRole | null | undefined, scope: PageScope): boolean {
+    if (!role) return true; // role not loaded yet, show all
+    if (role === 'master') return true;
+    if (scope === 'master') return false;
+    if (role === 'all') return true;
+    return role === scope;
+}
 
 const navIcons: Record<AdminPage, React.ReactNode> = {
     dashboard: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
@@ -31,7 +43,8 @@ const navGradients: Record<AdminPage, string> = {
     tour: 'from-emerald-500 to-teal-600 shadow-emerald-500/25',
 };
 
-export function AdminHeader({ activePage, onLogout, rightContent }: AdminHeaderProps) {
+export function AdminHeader({ activePage, onLogout, rightContent, adminRole }: AdminHeaderProps) {
+    const visibleNavItems = navItems.filter(item => canSeeNav(adminRole, item.scope));
     return (
         <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
             <div className="max-w-screen-xl mx-auto px-4 h-12 flex items-center justify-between">
@@ -43,7 +56,7 @@ export function AdminHeader({ activePage, onLogout, rightContent }: AdminHeaderP
                         <span className="font-bold text-slate-800">{navItems.find(i => i.id === activePage)?.label || 'Admin'}</span>
                     </div>
                     <nav className="flex items-center gap-1 text-xs" aria-label="관리자 메뉴">
-                        {navItems.map(item => (
+                        {visibleNavItems.map(item => (
                             <Link
                                 key={item.id}
                                 href={item.href}

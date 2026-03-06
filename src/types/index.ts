@@ -10,10 +10,14 @@ export type RoleKey = 'missionary' | 'leader' | 'team_member' | 'common';
 // View States
 export type ViewState = 'landing' | 'role_selection' | 'team_selection' | 'survey_form' | 'submitting' | 'success';
 
+// Admin Role Types
+export type AdminRole = 'master' | 'survey' | 'tour' | 'all';
+
 // Auth State
 export interface AuthState {
   user: User | null;
   isAdmin: boolean;
+  adminRole: AdminRole | null;
   loading: boolean;
 }
 

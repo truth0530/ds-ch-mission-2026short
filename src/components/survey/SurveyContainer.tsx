@@ -22,7 +22,7 @@ export default function SurveyContainer() {
     const [role, setRole] = useState<RoleType | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<TeamInfo | null>(null);
     const [formData, setFormData] = useState<Record<string, string | number | string[]>>({});
-    const [auth, setAuth] = useState<AuthState>({ user: null, isAdmin: false, loading: true });
+    const [auth, setAuth] = useState<AuthState>({ user: null, isAdmin: false, adminRole: null, loading: true });
     const [sbClient, setSbClient] = useState<SupabaseClient | null>(null);
     const [teams, setTeams] = useState<TeamInfo[]>(MISSION_TEAMS);
     const [questions, setQuestions] = useState<QuestionsMap>({
@@ -79,7 +79,7 @@ export default function SurveyContainer() {
                 if (session?.user) {
                     checkUserStatus(client, session.user);
                 } else {
-                    setAuth({ user: null, isAdmin: false, loading: false });
+                    setAuth({ user: null, isAdmin: false, adminRole: null, loading: false });
                 }
             });
 
@@ -210,7 +210,7 @@ export default function SurveyContainer() {
             }
         } finally {
             // 항상 로컬 상태를 초기화
-            setAuth({ user: null, isAdmin: false, loading: false });
+            setAuth({ user: null, isAdmin: false, adminRole: null, loading: false });
             setFormData({});
             setRole(null);
             setSelectedTeam(null);
