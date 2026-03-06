@@ -213,39 +213,34 @@ function TourMyContent() {
                         const isFull = remaining <= 0;
 
                         return (
-                            <div key={slot.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm mb-4 overflow-hidden">
+                            <div key={slot.id} className="bg-white rounded-xl border border-slate-100 shadow-sm mb-2 overflow-hidden">
                                 {/* Slot header */}
-                                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                                    <div>
-                                        <p className="font-bold text-slate-900">{formatDate(slot.tour_date)}</p>
-                                        <p className="text-xs text-slate-500">{slot.time_label}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                                <div className={`px-3 py-2 flex items-center justify-between ${slotReservations.length > 0 ? 'border-b border-slate-100' : ''}`}>
+                                    <p className="font-bold text-sm text-slate-900">
+                                        {formatDate(slot.tour_date)} <span className="text-slate-500 font-medium">{slot.time_label}</span>
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400">{slot.current_bookings}/{slot.max_capacity}명</span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                             isFull ? 'bg-slate-200 text-slate-500'
                                             : remaining <= 1 ? 'bg-amber-100 text-amber-700'
                                             : 'bg-emerald-100 text-emerald-700'
                                         }`}>
                                             {isFull ? '마감' : `잔여 ${remaining}석`}
                                         </span>
-                                        <p className="text-[10px] text-slate-400 mt-1">{slot.current_bookings}/{slot.max_capacity}명</p>
                                     </div>
                                 </div>
 
                                 {/* Reservation list */}
-                                {slotReservations.length > 0 ? (
-                                    <div className="px-4 py-2">
-                                        <div className="flex flex-wrap gap-1.5">
+                                {slotReservations.length > 0 && (
+                                    <div className="px-3 py-1.5">
+                                        <div className="flex flex-wrap gap-1">
                                             {slotReservations.map((r, i) => (
-                                                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#6d13ec]/5 text-[#6d13ec] text-xs font-medium rounded-lg border border-[#6d13ec]/10">
+                                                <span key={i} className="inline-flex items-center px-2 py-0.5 bg-[#6d13ec]/5 text-[#6d13ec] text-[11px] font-medium rounded border border-[#6d13ec]/10">
                                                     {r.name}
                                                 </span>
                                             ))}
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="px-4 py-3">
-                                        <p className="text-xs text-slate-400">아직 신청자가 없습니다</p>
                                     </div>
                                 )}
                             </div>
