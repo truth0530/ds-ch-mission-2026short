@@ -19,10 +19,14 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { slot_id, name, memo } = body;
+        const { slot_id, name, pin, memo } = body;
 
-        if (!slot_id || !name) {
+        if (!slot_id || !name || !pin) {
             return NextResponse.json({ error: '필수 항목을 입력해주세요' }, { status: 400 });
+        }
+
+        if (!/^\d{4}$/.test(pin)) {
+            return NextResponse.json({ error: '비밀번호는 숫자 4자리여야 합니다' }, { status: 400 });
         }
 
         const cleanName = sanitizeInput(name.trim());
@@ -72,7 +76,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '예약 생성에 실패했습니다' }, { status: 500 });
         }
 
-        const formatted = formatTourReservation(row as TourReservationRpcRow);
+        // Store PIN as manage_token
+        await client
+            .from('tour_reservations')
+            .update({ manage_token: pin })
+            .eq('id', row.id);
+
+        const rpcRow = row as TourReservationRpcRow;
+        rpcRow.manage_token = pin;
+        const formatted = formatTourReservation(rpcRow);
         return NextResponse.json({ data: toPublicReservation(formatted) }, { status: 201 });
     } catch {
         return NextResponse.json({ error: '서버 오류' }, { status: 500 });

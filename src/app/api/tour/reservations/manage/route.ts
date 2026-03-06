@@ -5,26 +5,6 @@ import { formatTourReservation } from '@/lib/tour';
 import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationRpcRow } from '@/types';
 
-function validateManageFields(
-  reservationCode: unknown,
-  manageToken: unknown,
-  name: unknown
-) {
-  if (
-    typeof reservationCode !== 'string' ||
-    typeof manageToken !== 'string' ||
-    typeof name !== 'string'
-  ) {
-    return null;
-  }
-
-  return {
-    reservationCode: sanitizeInput(reservationCode.trim().toUpperCase()),
-    manageToken: sanitizeInput(manageToken.trim()),
-    name: sanitizeInput(name.trim()),
-  };
-}
-
 export async function POST(request: NextRequest) {
   try {
     const client = getServerSupabaseClient();
@@ -38,18 +18,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, reservation_code, manage_token, name, new_slot_id } = body;
-    const fields = validateManageFields(reservation_code, manage_token, name);
+    const { action, name, pin, new_slot_id } = body;
 
-    if (!fields) {
-      return NextResponse.json({ error: '예약번호, 관리번호, 이름을 입력해주세요' }, { status: 400 });
+    if (!name || !pin) {
+      return NextResponse.json({ error: '이름과 비밀번호를 입력해주세요' }, { status: 400 });
     }
+
+    const cleanName = sanitizeInput(name.trim());
+    const cleanPin = sanitizeInput(pin.trim());
 
     if (action === 'cancel') {
       const { data, error } = await client.rpc('cancel_tour_reservation', {
-        p_reservation_code: fields.reservationCode,
-        p_manage_token: fields.manageToken,
-        p_name: fields.name,
+        p_reservation_code: '',
+        p_manage_token: cleanPin,
+        p_name: cleanName,
       });
 
       if (error) {
@@ -72,9 +54,9 @@ export async function POST(request: NextRequest) {
       }
 
       const { data, error } = await client.rpc('change_tour_reservation', {
-        p_reservation_code: fields.reservationCode,
-        p_manage_token: fields.manageToken,
-        p_name: fields.name,
+        p_reservation_code: '',
+        p_manage_token: cleanPin,
+        p_name: cleanName,
         p_new_slot_id: new_slot_id,
       });
 

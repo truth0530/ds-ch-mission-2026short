@@ -33,6 +33,7 @@ function MaterialIcon({ name, className = '', filled = false }: { name: string; 
 
 interface ReservationForm {
     name: string;
+    pin: string;
     memo: string;
 }
 
@@ -41,7 +42,7 @@ export default function TourPage() {
     const [loading, setLoading] = useState(true);
     const [selectedSlot, setSelectedSlot] = useState<TourSlot | null>(null);
     const [leaders, setLeaders] = useState<TourLeader[]>([]);
-    const [form, setForm] = useState<ReservationForm>({ name: '', memo: '' });
+    const [form, setForm] = useState<ReservationForm>({ name: '', pin: '', memo: '' });
     const [leaderQuery, setLeaderQuery] = useState('');
     const [selectedLeader, setSelectedLeader] = useState<TourLeader | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -98,6 +99,10 @@ export default function TourPage() {
             setError('조/조장명을 검색해서 목록에서 선택해주세요');
             return;
         }
+        if (!/^\d{4}$/.test(form.pin)) {
+            setError('비밀번호 4자리를 입력해주세요');
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {
@@ -107,6 +112,7 @@ export default function TourPage() {
                 body: JSON.stringify({
                     slot_id: selectedSlot.id,
                     name: selectedLeader.name,
+                    pin: form.pin,
                     memo: form.memo || undefined,
                 }),
             });
@@ -114,7 +120,7 @@ export default function TourPage() {
             if (!res.ok) { setError(json.error || '신청에 실패했습니다'); return; }
             setResult(json.data);
             setSelectedSlot(null);
-            setForm({ name: '', memo: '' });
+            setForm({ name: '', pin: '', memo: '' });
             setLeaderQuery('');
             setSelectedLeader(null);
             fetchSlots();
@@ -147,19 +153,9 @@ export default function TourPage() {
                             <MaterialIcon name="check_circle" className="text-emerald-500 text-5xl" filled />
                         </div>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">신청이 완료되었습니다!</h2>
-                        <p className="text-sm text-slate-500 mb-6">예약번호와 관리번호를 함께 보관해주세요</p>
+                        <p className="text-sm text-slate-500 mb-6">수정/취소는 신청현황에서 비밀번호로 가능합니다</p>
 
                         <div className="bg-[#6d13ec]/5 border border-[#6d13ec]/20 rounded-2xl p-5 mb-6 text-left space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-500 text-sm">예약번호</span>
-                                <span className="font-bold text-[#6d13ec] text-xl tracking-widest font-mono">{result.reservation_code}</span>
-                            </div>
-                            <div className="h-px bg-slate-200" />
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-500 text-sm">관리번호</span>
-                                <span className="font-bold text-slate-900 text-sm tracking-wide font-mono">{result.manage_token}</span>
-                            </div>
-                            <div className="h-px bg-slate-200" />
                             <div className="flex justify-between items-center">
                                 <span className="text-slate-500 text-sm">일정</span>
                                 <span className="font-bold text-slate-900">
@@ -183,10 +179,10 @@ export default function TourPage() {
                                 목록으로
                             </button>
                             <Link
-                                href={`/tour/my?code=${encodeURIComponent(result.reservation_code)}&token=${encodeURIComponent(result.manage_token)}&name=${encodeURIComponent(result.name)}`}
+                                href="/tour/my"
                                 className="flex-1 h-12 text-sm bg-gradient-to-r from-[#6d13ec] to-[#9333ea] text-white rounded-xl hover:opacity-90 transition-all shadow-lg shadow-[#6d13ec]/30 font-semibold flex items-center justify-center gap-1"
                             >
-                                내 신청 조회
+                                신청현황 보기
                                 <MaterialIcon name="arrow_forward" className="text-base" />
                             </Link>
                         </div>
@@ -348,6 +344,20 @@ export default function TourPage() {
                                             </div>
                                         )}
                                         <div className="flex flex-col gap-1.5">
+                                            <label className="text-slate-700 text-sm font-semibold px-1">비밀번호 (숫자 4자리)</label>
+                                            <input
+                                                type="password"
+                                                inputMode="numeric"
+                                                value={form.pin}
+                                                onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setForm(f => ({ ...f, pin: v })); }}
+                                                className="w-full px-4 h-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-[#6d13ec] focus:border-[#6d13ec] placeholder:text-slate-400 text-base tracking-[0.3em] text-center font-mono"
+                                                placeholder="●●●●"
+                                                required
+                                                maxLength={4}
+                                            />
+                                            <p className="text-xs text-slate-400 px-1">수정/취소 시 필요합니다</p>
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
                                             <div className="flex justify-between items-center px-1">
                                                 <label className="text-slate-700 text-sm font-semibold">메모</label>
                                                 <span className="text-slate-400 text-xs">선택사항</span>
@@ -357,7 +367,7 @@ export default function TourPage() {
                                                 onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-[#6d13ec] focus:border-[#6d13ec] placeholder:text-slate-400 resize-none text-sm"
                                                 placeholder="특별한 요청 사항이 있다면 적어주세요"
-                                                rows={3}
+                                                rows={2}
                                                 maxLength={200}
                                             />
                                         </div>

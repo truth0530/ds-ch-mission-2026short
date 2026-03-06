@@ -4,7 +4,7 @@ import { getRequestIp, getServerSupabaseClient } from '@/lib/supabase-server';
 import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationManageView, TourReservationWithSlot } from '@/types';
 
-// POST: 예약번호 + 이름으로 조회
+// POST: 이름 + 비밀번호(PIN)로 조회
 export async function POST(request: NextRequest) {
     try {
         const client = getServerSupabaseClient();
@@ -18,22 +18,21 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { reservation_code, manage_token, name } = body;
+        const { name, pin } = body;
 
-        if (!reservation_code || !manage_token || !name) {
-            return NextResponse.json({ error: '예약번호, 관리번호, 이름을 입력해주세요' }, { status: 400 });
+        if (!name || !pin) {
+            return NextResponse.json({ error: '이름과 비밀번호를 입력해주세요' }, { status: 400 });
         }
 
-        const cleanCode = sanitizeInput(reservation_code.trim().toUpperCase());
-        const cleanToken = sanitizeInput(manage_token.trim());
         const cleanName = sanitizeInput(name.trim());
+        const cleanPin = sanitizeInput(pin.trim());
 
         const { data, error } = await client
             .from('tour_reservations')
             .select('*, tour_slots(tour_date, tour_time, time_label)')
-            .eq('reservation_code', cleanCode)
-            .eq('manage_token', cleanToken)
             .eq('name', cleanName)
+            .eq('manage_token', cleanPin)
+            .eq('status', 'active')
             .single();
 
         if (error || !data) {
