@@ -234,27 +234,65 @@ export default function TourPage() {
                         </div>
                     )}
 
-                    {morningSlots.length > 0 && (
-                        <SlotSection
-                            title="오전 10시"
-                            icon="light_mode"
-                            iconColor="text-amber-500"
-                            slots={morningSlots}
-                            selectedSlot={selectedSlot}
-                            onSelect={(slot) => { setSelectedSlot(slot); setError(null); }}
-                        />
-                    )}
+                    {/* Step 1: 조장 선택 */}
+                    <section className="mt-2 mb-6">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-7 h-7 rounded-full bg-[#6d13ec] text-white text-xs font-bold flex items-center justify-center">1</div>
+                                <h2 className="text-base font-bold text-slate-900">조/조장 선택</h2>
+                            </div>
+                            <TourLeaderAutocomplete
+                                leaders={leaders}
+                                label=""
+                                placeholder="조 번호 또는 조장 이름으로 검색"
+                                value={leaderQuery}
+                                selectedLeader={selectedLeader}
+                                onValueChange={value => {
+                                    setLeaderQuery(value);
+                                    setForm(f => ({ ...f, name: value }));
+                                    const matchedLeader = getTourLeaderByQuery(leaders, value);
+                                    setSelectedLeader(matchedLeader);
+                                }}
+                                onSelect={leader => {
+                                    setSelectedLeader(leader);
+                                    setLeaderQuery(formatTourLeaderLabel(leader));
+                                    setForm(f => ({ ...f, name: leader.name }));
+                                    setError(null);
+                                }}
+                            />
+                        </div>
+                    </section>
 
-                    {afternoonSlots.length > 0 && (
-                        <SlotSection
-                            title="오후 5시"
-                            icon="dark_mode"
-                            iconColor="text-indigo-500"
-                            slots={afternoonSlots}
-                            selectedSlot={selectedSlot}
-                            onSelect={(slot) => { setSelectedSlot(slot); setError(null); }}
-                        />
-                    )}
+                    {/* Step 2: 날짜 선택 (조장 선택 후 활성화) */}
+                    <div className={`transition-opacity duration-300 ${selectedLeader ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center ${selectedLeader ? 'bg-[#6d13ec] text-white' : 'bg-slate-300 text-white'}`}>2</div>
+                            <h2 className="text-base font-bold text-slate-900">날짜 선택</h2>
+                            {!selectedLeader && <span className="text-xs text-slate-400">조장을 먼저 선택해주세요</span>}
+                        </div>
+
+                        {morningSlots.length > 0 && (
+                            <SlotSection
+                                title="오전 10시"
+                                icon="light_mode"
+                                iconColor="text-amber-500"
+                                slots={morningSlots}
+                                selectedSlot={selectedSlot}
+                                onSelect={(slot) => { setSelectedSlot(slot); setError(null); }}
+                            />
+                        )}
+
+                        {afternoonSlots.length > 0 && (
+                            <SlotSection
+                                title="오후 5시"
+                                icon="dark_mode"
+                                iconColor="text-indigo-500"
+                                slots={afternoonSlots}
+                                selectedSlot={selectedSlot}
+                                onSelect={(slot) => { setSelectedSlot(slot); setError(null); }}
+                            />
+                        )}
+                    </div>
                 </main>
 
                 {/* Bottom Sheet Form Modal */}
@@ -303,26 +341,16 @@ export default function TourPage() {
 
                                     {/* Form Fields */}
                                     <form id="tour-form" onSubmit={handleSubmit} className="space-y-4">
-                                        <TourLeaderAutocomplete
-                                            leaders={leaders}
-                                            label="조/조장명"
-                                            placeholder="예: 3조 또는 홍수경"
-                                            value={leaderQuery}
-                                            selectedLeader={selectedLeader}
-                                            onValueChange={value => {
-                                                setLeaderQuery(value);
-                                                setForm(f => ({ ...f, name: value }));
-                                                const matchedLeader = getTourLeaderByQuery(leaders, value);
-                                                setSelectedLeader(matchedLeader);
-                                            }}
-                                            onSelect={leader => {
-                                                setSelectedLeader(leader);
-                                                setLeaderQuery(formatTourLeaderLabel(leader));
-                                                setForm(f => ({ ...f, name: leader.name }));
-                                                setError(null);
-                                            }}
-                                            disabled={submitting}
-                                        />
+                                        {/* 선택된 조장 표시 */}
+                                        {selectedLeader && (
+                                            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                                <MaterialIcon name="person" className="text-emerald-600" />
+                                                <div>
+                                                    <span className="text-xs text-emerald-600 font-medium">신청자</span>
+                                                    <p className="text-sm font-bold text-slate-900">{formatTourLeaderLabel(selectedLeader)}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-slate-700 text-sm font-semibold px-1">연락처</label>
                                             <input
