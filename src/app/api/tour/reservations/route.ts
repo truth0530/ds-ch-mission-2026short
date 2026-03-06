@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
             p_phone: null,
             p_email: null,
             p_memo: memo ? sanitizeInput(memo.trim()) : null,
+            p_pin: pin,
         });
 
         if (error) {
@@ -91,14 +92,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '예약 생성에 실패했습니다' }, { status: 500 });
         }
 
-        // Store PIN as manage_token
-        await client
-            .from('tour_reservations')
-            .update({ manage_token: pin })
-            .eq('id', row.id);
-
         const rpcRow = row as TourReservationRpcRow;
-        rpcRow.manage_token = pin;
         const formatted = formatTourReservation(rpcRow);
         return NextResponse.json({ data: toPublicReservation(formatted) }, { status: 201 });
     } catch {

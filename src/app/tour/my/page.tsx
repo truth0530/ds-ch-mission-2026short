@@ -60,7 +60,7 @@ function TourMyContent() {
         try {
             const [slotsRes, leadersRes, reservationsRes] = await Promise.all([
                 fetch('/api/tour/slots'),
-                fetch('/api/tour/leaders'),
+                fetch('/api/tour/leaders?all=true'),
                 fetch('/api/tour/reservations/public'),
             ]);
             const [slotsJson, leadersJson, reservationsJson] = await Promise.all([

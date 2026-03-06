@@ -27,7 +27,7 @@ function validateLeaderPayload(body: unknown) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const client = getServerSupabaseClient();
     if (!client) {
@@ -42,6 +42,12 @@ export async function GET() {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // ?all=true skips filtering (used by /tour/my for lookup)
+    const url = new URL(request.url);
+    if (url.searchParams.get('all') === 'true') {
+      return NextResponse.json({ data });
     }
 
     // Filter out leaders who already have an active reservation
