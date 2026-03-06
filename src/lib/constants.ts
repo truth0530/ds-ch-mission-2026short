@@ -76,4 +76,12 @@ export const TABLES = {
   QUESTIONS: 'survey_questions',
   TEAMS: 'mission_teams',
   ADMIN_USERS: 'admin_users',
+  TOUR_SLOTS: 'tour_slots',
+  TOUR_RESERVATIONS: 'tour_reservations',
+} as const;
+
+// Tour Constants
+export const TOUR_CONFIG = {
+  MAX_CAPACITY: 4,
+  RESERVATION_CODE_LENGTH: 6,
 } as const;

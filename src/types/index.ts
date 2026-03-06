@@ -106,3 +106,6 @@ export interface ApiResponse<T> {
   error: string | null;
   success: boolean;
 }
+
+// Tour types
+export type { TourSlot, TourReservation, TourReservationWithSlot, TourReservationForm, TourLookupForm } from './tour';
