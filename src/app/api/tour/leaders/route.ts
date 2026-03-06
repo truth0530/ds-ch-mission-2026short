@@ -44,7 +44,16 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data as TourLeader[] });
+    // Filter out leaders who already have an active reservation
+    const { data: booked } = await client
+      .from('tour_reservations')
+      .select('name')
+      .eq('status', 'active');
+
+    const bookedNames = new Set((booked ?? []).map((r: { name: string }) => r.name));
+    const available = (data as TourLeader[]).filter(l => !bookedNames.has(l.name));
+
+    return NextResponse.json({ data: available });
   } catch {
     return NextResponse.json({ error: '서버 오류' }, { status: 500 });
   }

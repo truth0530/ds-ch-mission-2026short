@@ -50,6 +50,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: '조장 목록에서 이름을 선택해주세요' }, { status: 400 });
         }
 
+        // Check for existing active reservation with the same name
+        const { data: existing } = await client
+            .from('tour_reservations')
+            .select('id')
+            .eq('name', cleanName)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (existing) {
+            return NextResponse.json({ error: '이미 신청된 조장입니다' }, { status: 409 });
+        }
+
         const { data: reservation, error } = await client.rpc('create_tour_reservation', {
             p_slot_id: slot_id,
             p_name: cleanName,
@@ -59,6 +71,9 @@ export async function POST(request: NextRequest) {
         });
 
         if (error) {
+            if (error.message?.includes('DUPLICATE_LEADER')) {
+                return NextResponse.json({ error: '이미 신청된 조장입니다' }, { status: 409 });
+            }
             if (error.message?.includes('SLOT_FULL')) {
                 return NextResponse.json({ error: '해당 일정은 마감되었습니다' }, { status: 409 });
             }
