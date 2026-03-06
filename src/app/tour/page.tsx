@@ -45,6 +45,7 @@ export default function TourPage() {
     const [form, setForm] = useState<ReservationForm>({ name: '', pin: '', memo: '' });
     const [leaderQuery, setLeaderQuery] = useState('');
     const [selectedLeader, setSelectedLeader] = useState<TourLeader | null>(null);
+    const [bookedNames, setBookedNames] = useState<Set<string>>(new Set());
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<TourReservationPublicView | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -71,10 +72,23 @@ export default function TourPage() {
         }
     }, []);
 
+    const fetchBookedNames = useCallback(async () => {
+        try {
+            const res = await fetch('/api/tour/reservations/public');
+            const json = await res.json();
+            if (json.data) {
+                setBookedNames(new Set(json.data.map((r: { name: string }) => r.name)));
+            }
+        } catch {
+            console.error('Failed to fetch booked names');
+        }
+    }, []);
+
     useEffect(() => {
         fetchSlots();
         fetchLeaders();
-    }, [fetchSlots, fetchLeaders]);
+        fetchBookedNames();
+    }, [fetchSlots, fetchLeaders, fetchBookedNames]);
 
     // Supabase Realtime
     useEffect(() => {
@@ -246,6 +260,11 @@ export default function TourPage() {
                                     setSelectedLeader(matchedLeader);
                                 }}
                                 onSelect={leader => {
+                                    if (bookedNames.has(leader.name)) {
+                                        setError('이미 신청된 조장입니다. 수정/취소는 신청현황에서 가능합니다.');
+                                        setSelectedLeader(null);
+                                        return;
+                                    }
                                     setSelectedLeader(leader);
                                     setLeaderQuery(formatTourLeaderLabel(leader));
                                     setForm(f => ({ ...f, name: leader.name }));
