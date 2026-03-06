@@ -212,6 +212,22 @@ function TourMyContent() {
                         const remaining = slot.max_capacity - slot.current_bookings;
                         const isFull = remaining <= 0;
 
+                        if (isFull) {
+                            return (
+                                <div key={slot.id} className="bg-slate-50 rounded-lg border border-slate-100 mb-1 overflow-hidden opacity-50">
+                                    <div className="px-3 py-1 flex items-center justify-between">
+                                        <p className="text-xs text-slate-400">
+                                            {formatShortDate(slot.tour_date)} {slot.time_label}
+                                        </p>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[9px] text-slate-300">{slot.current_bookings}/{slot.max_capacity}명</span>
+                                            <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-slate-200 text-slate-400">마감</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
                         return (
                             <div key={slot.id} className="bg-white rounded-xl border border-slate-100 shadow-sm mb-2 overflow-hidden">
                                 {/* Slot header */}
@@ -222,11 +238,10 @@ function TourMyContent() {
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] text-slate-400">{slot.current_bookings}/{slot.max_capacity}명</span>
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                            isFull ? 'bg-slate-200 text-slate-500'
-                                            : remaining <= 1 ? 'bg-amber-100 text-amber-700'
+                                            remaining <= 1 ? 'bg-amber-100 text-amber-700'
                                             : 'bg-emerald-100 text-emerald-700'
                                         }`}>
-                                            {isFull ? '마감' : `잔여 ${remaining}석`}
+                                            잔여 {remaining}석
                                         </span>
                                     </div>
                                 </div>
