@@ -331,52 +331,48 @@ function TourMyContent() {
                                     return (
                                         <div
                                             key={leader.id}
-                                            className={`rounded-lg border shadow-sm overflow-hidden ${
+                                            className={`rounded-lg border shadow-sm ${
                                                 hasReservation
                                                     ? 'bg-white border-slate-100'
                                                     : 'bg-slate-50 border-slate-100 opacity-60'
                                             }`}
                                         >
-                                            {/* Compact Team Header */}
-                                            <div className={`px-2.5 py-1.5 ${
+                                            {/* Compact One-Line Layout */}
+                                            <div className={`px-2 py-1.5 flex items-center gap-1.5 ${
                                                 hasReservation
-                                                    ? 'bg-gradient-to-r from-[#6d13ec]/10 to-transparent'
-                                                    : 'bg-slate-100'
+                                                    ? 'bg-gradient-to-r from-[#6d13ec]/5 to-transparent'
+                                                    : ''
                                             }`}>
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                                        hasReservation
-                                                            ? 'text-white bg-[#6d13ec]'
-                                                            : 'text-slate-600 bg-slate-200'
-                                                    }`}>
-                                                        {leader.group_number}
-                                                    </span>
-                                                    <span className={`text-[11px] font-bold truncate flex-1 ${
-                                                        hasReservation ? 'text-slate-900' : 'text-slate-500'
-                                                    }`}>
-                                                        {leader.name}
-                                                    </span>
+                                                <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                                    hasReservation
+                                                        ? 'text-white bg-[#6d13ec]'
+                                                        : 'text-slate-600 bg-slate-200'
+                                                }`}>
+                                                    {leader.group_number}
+                                                </span>
+                                                <span className={`text-[10px] font-bold ${
+                                                    hasReservation ? 'text-slate-900' : 'text-slate-500'
+                                                }`}>
+                                                    {leader.name}
+                                                </span>
+                                                <div className="flex-1 flex items-center justify-end">
+                                                    {activeReservations.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                                                            {activeReservations.map((r, i) => (
+                                                                <span key={i} className="text-[8px]">
+                                                                    <span className="font-semibold text-[#6d13ec]">
+                                                                        {formatShortDate(r.tour_slots.tour_date)}
+                                                                    </span>
+                                                                    <span className="text-slate-500 ml-0.5">
+                                                                        {r.tour_slots.time_label}
+                                                                    </span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[8px] text-slate-400 italic">미신청</span>
+                                                    )}
                                                 </div>
-                                            </div>
-
-                                            {/* Compact Reservations */}
-                                            <div className="px-2.5 py-1.5 min-h-[28px]">
-                                                {activeReservations.length > 0 ? (
-                                                    <div className="space-y-0.5">
-                                                        {activeReservations.map((r, i) => (
-                                                            <div key={i} className="flex items-center gap-1">
-                                                                <span className="text-[9px] font-semibold text-[#6d13ec]">
-                                                                    {formatShortDate(r.tour_slots.tour_date)}
-                                                                </span>
-                                                                <span className="text-[9px] text-slate-600">
-                                                                    {r.tour_slots.time_label}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-[9px] text-slate-400 italic">미신청</span>
-                                                )}
                                             </div>
                                         </div>
                                     );
