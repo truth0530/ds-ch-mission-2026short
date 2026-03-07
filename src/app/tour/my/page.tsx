@@ -390,8 +390,8 @@ function TourMyContent() {
                 {modal === 'auth' && (
                     <>
                         <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm" onClick={() => setModal(null)} />
-                        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center">
-                            <div className="w-full max-w-[480px] bg-white rounded-t-3xl shadow-2xl p-5 animate-[slideUp_0.3s_ease-out]">
+                        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+                            <div className="w-full max-w-[480px] bg-white rounded-3xl shadow-2xl p-5 max-h-[90vh] overflow-y-auto">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-lg font-bold text-slate-900">내 신청 조회</h2>
                                     <button onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600 p-1">
@@ -450,8 +450,8 @@ function TourMyContent() {
                 {modal === 'detail' && reservation && (
                     <>
                         <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm" onClick={() => setModal(null)} />
-                        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center">
-                            <div className="w-full max-w-[480px] bg-white rounded-t-3xl shadow-2xl p-5 animate-[slideUp_0.3s_ease-out]">
+                        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+                            <div className="w-full max-w-[480px] bg-white rounded-3xl shadow-2xl p-5 max-h-[90vh] overflow-y-auto">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-lg font-bold text-slate-900">내 신청 정보</h2>
                                     <button onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600 p-1">
@@ -506,8 +506,8 @@ function TourMyContent() {
                 {modal === 'change' && reservation && (
                     <>
                         <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm" onClick={() => setModal(null)} />
-                        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center">
-                            <div className="w-full max-w-[480px] bg-white rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-[slideUp_0.3s_ease-out]">
+                        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+                            <div className="w-full max-w-[480px] bg-white rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
                                 <div className="flex items-center justify-between p-5 border-b border-slate-100">
                                     <h2 className="text-lg font-bold text-slate-900">일정 변경</h2>
                                     <button onClick={() => { setModal('detail'); setSelectedNewSlot(null); setError(null); }} className="text-slate-400 hover:text-slate-600 p-1">
