@@ -36,12 +36,14 @@ export default function TourMyPage() {
 }
 
 type ModalMode = null | 'auth' | 'detail' | 'change';
+type ViewMode = 'schedule' | 'team';
 
 function TourMyContent() {
     const [slots, setSlots] = useState<TourSlot[]>([]);
     const [leaders, setLeaders] = useState<TourLeader[]>([]);
     const [reservations, setReservations] = useState<PublicReservation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState<ViewMode>('schedule');
 
     // Auth & manage
     const [modal, setModal] = useState<ModalMode>(null);
@@ -166,6 +168,18 @@ function TourMyContent() {
         return acc;
     }, {});
 
+    // Group reservations by team (leader name)
+    const reservationsByTeam = reservations.reduce<Record<string, PublicReservation[]>>((acc, r) => {
+        (acc[r.name] ||= []).push(r);
+        return acc;
+    }, {});
+
+    // Get all teams with reservations for team view
+    const allTeamsWithStatus = leaders.map(leader => ({
+        leader,
+        reservations: reservationsByTeam[leader.name] || []
+    })).sort((a, b) => a.leader.group_number - b.leader.group_number);
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#f7f6f8] flex items-center justify-center">
@@ -178,8 +192,8 @@ function TourMyContent() {
         <div className="min-h-screen bg-[#f7f6f8]">
             <div className="max-w-[430px] mx-auto bg-[#f7f6f8] shadow-2xl min-h-screen">
                 {/* Header */}
-                <header className="sticky top-0 z-10 bg-[#f7f6f8]/80 backdrop-blur-md px-4 pt-6 pb-4">
-                    <div className="flex items-center justify-between">
+                <header className="sticky top-0 z-10 bg-[#f7f6f8]/80 backdrop-blur-md px-4 pt-6 pb-2">
+                    <div className="flex items-center justify-between mb-3">
                         <h1 className="text-xl font-bold text-slate-900">신청 현황</h1>
                         <div className="flex items-center gap-2">
                             <button
@@ -193,21 +207,47 @@ function TourMyContent() {
                             </Link>
                         </div>
                     </div>
+
+                    {/* Tab Navigation */}
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                        <button
+                            onClick={() => setViewMode('schedule')}
+                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                                viewMode === 'schedule'
+                                    ? 'bg-white text-[#6d13ec] shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            일정별 보기
+                        </button>
+                        <button
+                            onClick={() => setViewMode('team')}
+                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                                viewMode === 'team'
+                                    ? 'bg-white text-[#6d13ec] shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            조별 보기
+                        </button>
+                    </div>
                 </header>
 
-                <main className="px-4 pb-8">
+                <main className="px-4 pb-8 pt-4">
                     {message && (
                         <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl p-3 mb-4">
                             {message}
                         </div>
                     )}
 
-                    {/* Slot cards with reservations */}
-                    {slots.length === 0 && (
-                        <p className="text-center text-slate-400 text-sm py-12">등록된 일정이 없습니다</p>
-                    )}
+                    {/* View Mode: Schedule */}
+                    {viewMode === 'schedule' && (
+                        <>
+                            {slots.length === 0 && (
+                                <p className="text-center text-slate-400 text-sm py-12">등록된 일정이 없습니다</p>
+                            )}
 
-                    {slots.map(slot => {
+                            {slots.map(slot => {
                         const slotReservations = reservationsBySlot[slot.id] || [];
                         const remaining = slot.max_capacity - slot.current_bookings;
                         const isFull = remaining <= 0;
@@ -273,6 +313,77 @@ function TourMyContent() {
                             </div>
                         );
                     })}
+                        </>
+                    )}
+
+                    {/* View Mode: Team - Compact Grid */}
+                    {viewMode === 'team' && (
+                        <>
+                            {allTeamsWithStatus.length === 0 && (
+                                <p className="text-center text-slate-400 text-sm py-12">등록된 조가 없습니다</p>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                                {allTeamsWithStatus.map(({ leader, reservations }) => {
+                                    const activeReservations = reservations.filter(r => r.status === 'active');
+                                    const hasReservation = activeReservations.length > 0;
+
+                                    return (
+                                        <div
+                                            key={leader.id}
+                                            className={`rounded-lg border shadow-sm overflow-hidden ${
+                                                hasReservation
+                                                    ? 'bg-white border-slate-100'
+                                                    : 'bg-slate-50 border-slate-100 opacity-60'
+                                            }`}
+                                        >
+                                            {/* Compact Team Header */}
+                                            <div className={`px-2.5 py-1.5 ${
+                                                hasReservation
+                                                    ? 'bg-gradient-to-r from-[#6d13ec]/10 to-transparent'
+                                                    : 'bg-slate-100'
+                                            }`}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                        hasReservation
+                                                            ? 'text-white bg-[#6d13ec]'
+                                                            : 'text-slate-600 bg-slate-200'
+                                                    }`}>
+                                                        {leader.group_number}
+                                                    </span>
+                                                    <span className={`text-[11px] font-bold truncate flex-1 ${
+                                                        hasReservation ? 'text-slate-900' : 'text-slate-500'
+                                                    }`}>
+                                                        {leader.name}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Compact Reservations */}
+                                            <div className="px-2.5 py-1.5 min-h-[28px]">
+                                                {activeReservations.length > 0 ? (
+                                                    <div className="space-y-0.5">
+                                                        {activeReservations.map((r, i) => (
+                                                            <div key={i} className="flex items-center gap-1">
+                                                                <span className="text-[9px] font-semibold text-[#6d13ec]">
+                                                                    {formatShortDate(r.tour_slots.tour_date)}
+                                                                </span>
+                                                                <span className="text-[9px] text-slate-600">
+                                                                    {r.tour_slots.time_label}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[9px] text-slate-400 italic">미신청</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
                 </main>
 
                 {/* Auth Modal */}
