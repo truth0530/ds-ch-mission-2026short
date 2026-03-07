@@ -27,20 +27,23 @@ export async function GET(request: NextRequest) {
                 .order('group_number', { ascending: true }),
             client
                 .from(TABLES.TOUR_RESERVATIONS)
-                .select('*, tour_slots(tour_date, tour_time, time_label)')
+                .select('id, slot_id, reservation_code, name, phone, email, memo, status, created_at, updated_at, tour_slots(tour_date, tour_time, time_label)')
                 .order('created_at', { ascending: false }),
         ]);
 
         if (slotsResult.error) {
-            return NextResponse.json({ error: slotsResult.error.message }, { status: 500 });
+            console.error('관리자 슬롯 조회 실패:', slotsResult.error.message);
+            return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
         }
 
         if (leadersResult.error) {
-            return NextResponse.json({ error: leadersResult.error.message }, { status: 500 });
+            console.error('관리자 조장 조회 실패:', leadersResult.error.message);
+            return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
         }
 
         if (reservationsResult.error) {
-            return NextResponse.json({ error: reservationsResult.error.message }, { status: 500 });
+            console.error('관리자 예약 조회 실패:', reservationsResult.error.message);
+            return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
         }
 
         return NextResponse.json({

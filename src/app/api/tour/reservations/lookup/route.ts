@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
         const cleanName = sanitizeInput(name.trim());
         const cleanPin = sanitizeInput(pin.trim());
 
+        if (!checkRateLimit(`tour:lookup:name:${cleanName}`, 5, 10 * 60 * 1000)) {
+            return NextResponse.json({ error: '잠시 후 다시 시도해주세요' }, { status: 429 });
+        }
+
         const { data, error } = await client
             .from('tour_reservations')
             .select('*, tour_slots(tour_date, tour_time, time_label)')
@@ -43,7 +47,6 @@ export async function POST(request: NextRequest) {
         const reservation = data as TourReservationWithSlot;
         const formatted: TourReservationManageView = {
             reservation_code: reservation.reservation_code,
-            manage_token: reservation.manage_token,
             name: reservation.name,
             phone: reservation.phone,
             email: reservation.email,

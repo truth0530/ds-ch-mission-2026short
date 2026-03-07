@@ -7,7 +7,7 @@
  * 환경변수:
  *   NEXT_PUBLIC_SUPABASE_URL - Supabase URL
  *   SUPABASE_SERVICE_ROLE_KEY - Service Role Key
- *   PIN_HASH_SECRET - (선택) 해시 시크릿 (기본값: ds-ch-tour-2026-pin-secret)
+ *   PIN_HASH_SECRET - (필수) 해시 시크릿
  *
  * 동작:
  *   1. active 상태의 예약 중 manage_token이 4자리 숫자인 행을 조회
@@ -20,15 +20,15 @@ import { createHmac } from 'crypto';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const PIN_SECRET = process.env.PIN_HASH_SECRET || 'ds-ch-tour-2026-pin-secret';
+const PIN_SECRET = process.env.PIN_HASH_SECRET;
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    console.error('환경변수를 설정해주세요: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !PIN_SECRET) {
+    console.error('환경변수를 설정해주세요: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PIN_HASH_SECRET');
     process.exit(1);
 }
 
 function hashPin(pin: string): string {
-    return createHmac('sha256', PIN_SECRET).update(pin).digest('hex');
+    return createHmac('sha256', PIN_SECRET!).update(pin).digest('hex');
 }
 
 async function main() {

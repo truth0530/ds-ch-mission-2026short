@@ -17,7 +17,8 @@ export async function GET() {
             .order('tour_time', { ascending: true });
 
         if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            console.error('슬롯 조회 실패:', error.message);
+            return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
         }
 
         return NextResponse.json({ data });

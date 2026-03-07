@@ -188,7 +188,7 @@ function TourMyContent() {
                             >
                                 내 신청 수정/취소
                             </button>
-                            <Link href="/tour" className="text-xs text-[#6d13ec] font-semibold hover:opacity-80">
+                            <Link href="/tour/register" className="text-xs text-[#6d13ec] font-semibold hover:opacity-80">
                                 신청하기 &rarr;
                             </Link>
                         </div>

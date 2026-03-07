@@ -41,7 +41,6 @@ export interface TourReservationWithSlot extends TourReservation {
 
 export interface TourReservationManageView {
   reservation_code: string;
-  manage_token: string;
   name: string;
   phone: string;
   email: string | null;
@@ -55,7 +54,6 @@ export interface TourReservationManageView {
 
 export interface TourReservationPublicView {
   reservation_code: string;
-  manage_token: string;
   name: string;
   status: 'active' | 'cancelled';
   created_at: string;
@@ -63,7 +61,7 @@ export interface TourReservationPublicView {
   tour_slots: Pick<TourSlot, 'tour_date' | 'tour_time' | 'time_label'>;
 }
 
-export type TourReservationAdminView = TourReservationWithSlot;
+export type TourReservationAdminView = Omit<TourReservationWithSlot, 'manage_token'>;
 
 export interface TourReservationRpcRow {
   id: string;

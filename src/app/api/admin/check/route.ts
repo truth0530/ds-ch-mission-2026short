@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { ENV_CONFIG, TABLES } from '@/lib/constants';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getRequestIp } from '@/lib/supabase-server';
 import { isValidEmail } from '@/lib/validators';
 
 // Create server-side Supabase client (uses service role key if available)
@@ -17,6 +19,14 @@ function getServerClient() {
 
 export async function POST(request: NextRequest) {
     try {
+        const ip = getRequestIp(request);
+        if (!checkRateLimit(`admin:check:${ip}`, 10, 10 * 60 * 1000)) {
+            return NextResponse.json(
+                { error: 'Too many requests', isAdmin: false },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
         const { email } = body;
 

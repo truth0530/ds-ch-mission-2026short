@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
       .order('group_number', { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('조장 조회 실패:', error.message);
+      return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
     }
 
     // ?all=true skips filtering (used by /tour/my for lookup)
@@ -92,7 +93,8 @@ export async function POST(request: NextRequest) {
       if (error.code === '23505') {
         return NextResponse.json({ error: '같은 조 번호 또는 이름이 이미 존재합니다' }, { status: 409 });
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('조장 등록 실패:', error.message);
+      return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
     }
 
     return NextResponse.json({ data }, { status: 201 });

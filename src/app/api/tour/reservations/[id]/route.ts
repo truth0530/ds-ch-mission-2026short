@@ -37,11 +37,12 @@ export async function PATCH(
             .from(TABLES.TOUR_RESERVATIONS)
             .update({ status: 'cancelled' })
             .eq('id', id)
-            .select('*, tour_slots(tour_date, tour_time, time_label)')
+            .select('id, slot_id, reservation_code, name, phone, email, memo, status, created_at, updated_at, tour_slots(tour_date, tour_time, time_label)')
             .single();
 
         if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            console.error('관리자 예약 취소 실패:', error.message);
+            return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
         }
 
         return NextResponse.json({ data });

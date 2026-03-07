@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
     const cleanPin = sanitizeInput(pin.trim());
     const hashedPin = hashPin(cleanPin);
 
+    if (!checkRateLimit(`tour:manage:name:${cleanName}`, 5, 10 * 60 * 1000)) {
+      return NextResponse.json({ error: '잠시 후 다시 시도해주세요' }, { status: 429 });
+    }
+
     if (action === 'cancel') {
       const { data, error } = await client.rpc('cancel_tour_reservation', {
         p_reservation_code: '',
@@ -43,7 +47,8 @@ export async function POST(request: NextRequest) {
         if (error.message?.includes('ALREADY_CANCELLED')) {
           return NextResponse.json({ error: '이미 취소된 예약입니다' }, { status: 400 });
         }
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('예약 취소 실패:', error.message);
+        return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
       }
 
       const row = Array.isArray(data) ? data[0] : data;
@@ -81,7 +86,8 @@ export async function POST(request: NextRequest) {
         if (error.message?.includes('INACTIVE_SLOT')) {
           return NextResponse.json({ error: '비활성화된 일정입니다' }, { status: 400 });
         }
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('예약 변경 실패:', error.message);
+        return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
       }
 
       const row = Array.isArray(data) ? data[0] : data;

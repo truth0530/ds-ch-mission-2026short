@@ -76,7 +76,8 @@ export async function PATCH(
       if (error.code === '23505') {
         return NextResponse.json({ error: '같은 조 번호 또는 이름이 이미 존재합니다' }, { status: 409 });
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('조장 수정 실패:', error.message);
+      return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
     }
 
     return NextResponse.json({ data });
@@ -107,7 +108,8 @@ export async function DELETE(
       .eq('id', id);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('조장 삭제 실패:', error.message);
+      return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
