@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getRequestIp, getServerSupabaseClient } from '@/lib/supabase-server';
+import { hashPin } from '@/lib/pin-hash';
 import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationManageView, TourReservationWithSlot } from '@/types';
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
             .from('tour_reservations')
             .select('*, tour_slots(tour_date, tour_time, time_label)')
             .eq('name', cleanName)
-            .eq('manage_token', cleanPin)
+            .eq('manage_token', hashPin(cleanPin))
             .eq('status', 'active')
             .single();
 

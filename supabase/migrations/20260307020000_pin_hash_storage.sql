@@ -1,0 +1,17 @@
+-- PIN 해시 저장 전환 기록
+-- 실제 해시 변환은 애플리케이션 레벨(HMAC-SHA256)에서 수행됨
+-- DB에서는 pgcrypto의 search_path 제한으로 직접 해시 불가
+--
+-- 변경 사항:
+-- 1. API 라우트에서 PIN 저장/조회 시 hashPin() 함수로 해시 적용
+--    - src/app/api/tour/reservations/route.ts (생성)
+--    - src/app/api/tour/reservations/lookup/route.ts (조회)
+--    - src/app/api/tour/reservations/manage/route.ts (취소/변경)
+-- 2. 해시 함수: HMAC-SHA256 with server-side secret (PIN_HASH_SECRET)
+--    - src/lib/pin-hash.ts
+-- 3. 기존 평문 PIN 마이그레이션: scripts/migrate-pin-hash.ts
+--    실행: npx tsx scripts/migrate-pin-hash.ts
+--
+-- manage_token 컬럼 크기는 변경 불필요 (TEXT 타입, 64자 hex 해시 저장 가능)
+
+-- 참고: RPC 함수는 변경 불필요 - 이미 해시된 값이 p_pin/p_manage_token으로 전달됨

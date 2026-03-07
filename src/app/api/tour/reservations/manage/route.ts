@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getRequestIp, getServerSupabaseClient } from '@/lib/supabase-server';
 import { formatTourReservation } from '@/lib/tour';
+import { hashPin } from '@/lib/pin-hash';
 import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationRpcRow } from '@/types';
 
@@ -26,11 +27,12 @@ export async function POST(request: NextRequest) {
 
     const cleanName = sanitizeInput(name.trim());
     const cleanPin = sanitizeInput(pin.trim());
+    const hashedPin = hashPin(cleanPin);
 
     if (action === 'cancel') {
       const { data, error } = await client.rpc('cancel_tour_reservation', {
         p_reservation_code: '',
-        p_manage_token: cleanPin,
+        p_manage_token: hashedPin,
         p_name: cleanName,
       });
 
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
 
       const { data, error } = await client.rpc('change_tour_reservation', {
         p_reservation_code: '',
-        p_manage_token: cleanPin,
+        p_manage_token: hashedPin,
         p_name: cleanName,
         p_new_slot_id: new_slot_id,
       });

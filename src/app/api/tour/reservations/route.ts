@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getServerSupabaseClient, getRequestIp } from '@/lib/supabase-server';
 import { formatTourReservation, toPublicReservation } from '@/lib/tour';
+import { hashPin } from '@/lib/pin-hash';
 import { sanitizeInput } from '@/lib/validators';
 import type { TourReservationRpcRow } from '@/types';
 
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
             p_phone: null,
             p_email: null,
             p_memo: memo ? sanitizeInput(memo.trim()) : null,
-            p_pin: pin,
+            p_pin: hashPin(pin),
         });
 
         if (error) {
