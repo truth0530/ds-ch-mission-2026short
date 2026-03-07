@@ -431,22 +431,42 @@ function SlotSection({
                 <MaterialIcon name={icon} className={iconColor} filled />
                 <h2 className="text-lg font-bold text-slate-900">{title}</h2>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-2">
                 {slots.map(slot => {
                     const remaining = slot.max_capacity - slot.current_bookings;
                     const isFull = remaining <= 0;
                     const isSelected = selectedSlot?.id === slot.id;
                     const fillPercent = (slot.current_bookings / slot.max_capacity) * 100;
 
+                    // 마감된 슬롯은 컴팩트하게 표시
+                    if (isFull) {
+                        return (
+                            <div
+                                key={slot.id}
+                                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-4 py-2.5 flex items-center justify-between opacity-60"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm font-semibold text-slate-500">
+                                        {formatDate(slot.tour_date)}
+                                    </span>
+                                    <span className="text-xs text-slate-400">
+                                        {slot.max_capacity}명 마감
+                                    </span>
+                                </div>
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-300 text-slate-600">
+                                    마감
+                                </span>
+                            </div>
+                        );
+                    }
+
+                    // 예약 가능한 슬롯은 기존처럼 표시
                     return (
                         <button
                             key={slot.id}
-                            onClick={() => !isFull && onSelect(slot)}
-                            disabled={isFull}
+                            onClick={() => onSelect(slot)}
                             className={`w-full text-left rounded-2xl p-5 flex flex-col gap-4 transition-all ${
-                                isFull
-                                    ? 'bg-slate-50 border border-slate-200 opacity-70 cursor-not-allowed'
-                                    : isSelected
+                                isSelected
                                     ? 'bg-white border-2 border-[#6d13ec] shadow-lg shadow-[#6d13ec]/10'
                                     : 'bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200'
                             }`}
@@ -457,13 +477,11 @@ function SlotSection({
                                     <h3 className="text-lg font-bold text-slate-900">{formatDate(slot.tour_date)}</h3>
                                 </div>
                                 <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                                    isFull
-                                        ? 'bg-slate-200 text-slate-500'
-                                        : remaining <= 1
+                                    remaining <= 1
                                         ? 'bg-amber-100 text-amber-700'
                                         : 'bg-emerald-100 text-emerald-700'
                                 }`}>
-                                    {isFull ? '마감' : `잔여 ${remaining}석`}
+                                    잔여 {remaining}석
                                 </span>
                             </div>
 
@@ -471,31 +489,20 @@ function SlotSection({
                                 <div className="flex justify-between items-center text-xs">
                                     <span className="font-medium text-slate-500">예약 현황</span>
                                     <span className="text-slate-400">
-                                        {isFull
-                                            ? `${slot.max_capacity}/${slot.max_capacity}명 신청 완료`
-                                            : `${slot.current_bookings}/${slot.max_capacity}명 신청`
-                                        }
+                                        {slot.current_bookings}/{slot.max_capacity}명 신청
                                     </span>
                                 </div>
                                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                                     <div
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                            isFull ? 'bg-slate-400' : 'bg-[#6d13ec]'
-                                        }`}
+                                        className="h-full rounded-full bg-[#6d13ec] transition-all duration-500"
                                         style={{ width: `${fillPercent}%` }}
                                     />
                                 </div>
                             </div>
 
-                            {!isFull ? (
-                                <div className="w-full bg-[#6d13ec] text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 transition-all">
-                                    신청하기
-                                </div>
-                            ) : (
-                                <div className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
-                                    신청 마감
-                                </div>
-                            )}
+                            <div className="w-full bg-[#6d13ec] text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 transition-all">
+                                신청하기
+                            </div>
                         </button>
                     );
                 })}
